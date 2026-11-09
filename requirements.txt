@@ -1,0 +1,31 @@
+# Deep Learning Project - Requirements
+
+# CNN architecture, training, and image processing
+torch
+torchvision
+
+# Text embedding models
+gensim
+transformers
+
+# Hyperparameter optimization
+optuna
+
+# Numerical computation and evaluation
+numpy
+scipy
+scikit-learn
+pandas
+dataloader
+
+# Image processing
+Pillow
+
+# Visualization and experiment tracking
+matplotlib
+seaborn
+tqdm
+tensorboard
+
+# Dataset downloads
+kagglehub
