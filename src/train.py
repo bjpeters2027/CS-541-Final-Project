@@ -1,32 +1,21 @@
+import sys
+from pathlib import Path
+
 import pandas as pd
 import numpy as np
 import torch
 import torch.nn as nn
-import dataloader as dl
-from sklearn.model_selection import train_test_split
+from torch.utils.data import DataLoader
 import json
 
-from src.cnn_embed import CNNEmbed
-from src.cnn_noembed import CNNNoEmbed
+from src.utils.enums.path_enums import Paths
 
-def load_data(data_path, batch_size, test_split=0.2, validation_split=0.1):
-    """
-    Load data from a CSV file and return a DataLoader for training.
+from src.utils.load_data import load_data
+from src.utils.load_model import save_model
 
-    Args:
-        data_path (str): Path to the CSV file containing the data.
-        batch_size (int): Number of samples per batch.
-        test_split (float, optional): Proportion of the dataset to include in the test split. Defaults to 0.2.
-        validation_split (float, optional): Proportion of the dataset to include in the validation split. Defaults to 0.1.
-    """
-    
-    data = pd.read_csv(data_path)
-    train_data, unseen_data = train_test_split(data, test_size=test_split+validation_split)
-    test_data, val_data = train_test_split(unseen_data, test_size=validation_split/(test_split+validation_split))
-    train_loader = dl.DataLoader(train_data, batch_size=batch_size, shuffle=True)
-    test_loader = dl.DataLoader(test_data, batch_size=batch_size, shuffle=False)
-    val_loader = dl.DataLoader(val_data, batch_size=batch_size, shuffle=False)
-    return train_loader, test_loader, val_loader
+from experiment import initializer
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def test_model(model, test_data, criterion):
     """
@@ -43,6 +32,8 @@ def test_model(model, test_data, criterion):
     model.eval()
     with torch.no_grad():
         for inputs, labels in test_data:
+            inputs, labels = inputs.to(device), labels.to(device)
+            
             correct = 0
             total = 0
             
@@ -50,7 +41,7 @@ def test_model(model, test_data, criterion):
             loss = criterion(logits, labels)
             running_test_loss += loss.item()
             
-            _, predictions = torch.max(torch.softmax(logits), 1)
+            _, predictions = torch.max(torch.softmax(logits, dim=1), 1)
             total += labels.size(0)
             correct += (predictions == labels).sum().item()
             running_test_accuracy += correct / total
@@ -77,29 +68,30 @@ def train_model(model, train_data, test_data, criterion, optimizer, epochs):
     test_losses = []
     test_accuracies = []
     for epoch in range(epochs):
-        
         running_train_loss = 0
         model.train()
         for inputs, labels in train_data:
+            inputs, labels = inputs.to(device), labels.to(device)
+            
             optimizer.zero_grad()
             outputs = model(inputs)
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
-            running_loss += loss.item()
+            running_train_loss += loss.item()
             
-        train_losses.append(running_loss / len(train_data))
+        train_losses.append(running_train_loss / len(train_data))
         
         running_test_loss, running_test_accuracy = test_model(model, test_data, criterion)
                 
-        test_losses.append(running_test_loss / len(test_data))
-        test_accuracies.append(running_test_accuracy / len(test_data))
+        test_losses.append(running_test_loss)
+        test_accuracies.append(running_test_accuracy)
                 
         print(f"Epoch [{epoch+1}/{epochs}], Training Loss: {running_train_loss/len(train_data):.4f}, Test Loss: {running_test_loss/len(test_data):.4f}, Test Accuracy: {running_test_accuracy/len(test_data):.4f}")
     
     return train_losses, test_losses, test_accuracies
 
-def save_metrics(train_losses, test_losses, test_accuracies, output_path="src/artifacts/results/metrics.json"):
+def save_metrics(train_losses, test_losses, test_accuracies, filename="metrics"):
     """
     Save the training and testing metrics to a JSON file.
 
@@ -107,8 +99,10 @@ def save_metrics(train_losses, test_losses, test_accuracies, output_path="src/ar
         train_losses (list): List of training losses for each epoch.
         test_losses (list): List of testing losses for each epoch.
         test_accuracies (list): List of testing accuracies for each epoch.
-        output_path (str, optional): Path to save the metrics JSON file. Defaults to "src/artifacts/results/metrics.json".
+        filename (str, optional): Name of the JSON file to save the metrics. Defaults to "metrics".
     """
+    
+    output_path=f"{Paths.RESULTS}/{filename}.json"
     
     metrics = {
         "train_losses": train_losses,
@@ -118,4 +112,32 @@ def save_metrics(train_losses, test_losses, test_accuracies, output_path="src/ar
     
     with open(output_path, 'w') as f:
         json.dump(metrics, f)
-        
+
+def train_experiment(experimentname, criterion, model, config, modelArchitecture, embeddingModel):
+    """
+    Run the experiment: trains models, saves results.
+    """
+    
+    model = model.to(device)
+    
+    data_config = config["data"]
+    training_args = config["training_args"]
+    hyperparameters = config["hyperparameters"]
+    
+    train_loader, test_loader, val_loader = load_data(data_config["datafile"], training_args["batch_size"], data_config["test_split"], data_config["val_split"])
+    
+    optimizer = torch.optim.Adam(model.parameters(), lr=hyperparameters["learning_rate"])
+    
+    epochs = training_args["epochs"]
+    
+    train_losses, test_losses, test_accuracies = train_model(model, train_loader, test_loader, criterion, optimizer, epochs)
+    
+    save_metrics(train_losses, test_losses, test_accuracies, filename=f"{experimentname}_metrics")
+    
+    save_model(model, f"{experimentname}_model", modelArchitecture, config=config, experimentName=experimentname, embeddingModel=embeddingModel)
+    
+if __name__ == "__main__":
+    if len(sys.argv) != 5:
+        sys.exit(1)
+    else:
+        train_experiment(sys.argv[1], *initializer(sys.argv[2], sys.argv[3], sys.argv[4]))

@@ -4,3 +4,7 @@ import torch.nn
 class CNNNoEmbed(torch.nn.Module):
     def palceholder(self):
         pass
+    
+# TODO
+def initialize_model(config):
+    pass

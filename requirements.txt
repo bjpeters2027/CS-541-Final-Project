@@ -16,7 +16,6 @@ numpy
 scipy
 scikit-learn
 pandas
-dataloader
 
 # Image processing
 Pillow
@@ -29,3 +28,6 @@ tensorboard
 
 # Dataset downloads
 kagglehub
+
+# Other
+pyyaml

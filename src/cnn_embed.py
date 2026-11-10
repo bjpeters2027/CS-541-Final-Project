@@ -4,3 +4,7 @@ import torch.nn
 class CNNEmbed(torch.nn.Module):
     def palceholder(self):
         pass
+
+# TODO
+def initialize_model(embedding_type, config):
+    pass
