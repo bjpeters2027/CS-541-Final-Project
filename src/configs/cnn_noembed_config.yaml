@@ -1,3 +1,10 @@
+seed: 42
+
+model:
+  backbone: "resnet18"
+  weights: "IMAGENET1K_V1"
+  num_classes: 1000
+
 data:
   datafile: "data_cnn_noembed"
   test_split: 0.2
