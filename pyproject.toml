@@ -1,0 +1,17 @@
+[project]
+name = "dlproject-dataprep"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "pandas",
+    "pyarrow",
+    "pillow",
+    "torch",
+    "torchvision",
+    "gensim",
+    "transformers",
+    "requests",
+    "kaggle",
+    "tqdm",
+]
