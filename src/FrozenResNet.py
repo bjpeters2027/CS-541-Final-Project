@@ -14,7 +14,7 @@ class FrozenResNet18(nn.Module):
         pretrained_weights = ResNet18_Weights[weights] if weights is not None else None
         self.encoder = resnet18(weights=pretrained_weights)
         self.output_dim = self.encoder.fc.in_features
-        self.encoder.fc = nn.Identity()
+        setattr(self.encoder, "fc", nn.Identity())
         self.requires_grad_(False)
         self.eval()
 
