@@ -133,6 +133,7 @@ class CNNEmbedTests(unittest.TestCase):
         with config_path.open(encoding="utf-8") as file:
             config = yaml.safe_load(file)
         self.assertEqual(config["model"]["weights"], "IMAGENET1K_V1")
+        config["model"].pop("embedding_archive")
         for embedding_type in Embedding:
             with self.assertRaisesRegex(ValueError, "class-embedding"):
                 initialize_model(embedding_type, config)

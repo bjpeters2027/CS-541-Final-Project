@@ -6,9 +6,10 @@ model:
   num_classes: 1000
 
 data:
-  datafile: "data_cnn_noembed"
-  test_split: 0.2
+  manifest: "imagenet.parquet"
+  seen_classes: "seen.json"
   val_split: 0.1
+  num_workers: 0
 
 training_args:
   batch_size: 32

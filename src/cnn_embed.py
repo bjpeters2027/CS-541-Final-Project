@@ -35,6 +35,8 @@ def normalize_embeddings(embeddings: torch.Tensor) -> torch.Tensor:
 class CNNEmbed(nn.Module):
     """Map frozen CNN features into a fixed class-label embedding space."""
 
+    class_embeddings: torch.Tensor
+
     def __init__(
         self,
         class_embeddings: torch.Tensor,
@@ -104,4 +106,7 @@ def initialize_model(
         Path(embedding_path), map_location="cpu", weights_only=True
     )
     
-    return CNNEmbed(class_embeddings, weights=model_config["weights"])
+    weights = model_config["weights"]
+    if weights is not None and not isinstance(weights, str):
+        raise TypeError("model.weights must be a ResNet-18 weight name or None.")
+    return CNNEmbed(class_embeddings, weights=weights)

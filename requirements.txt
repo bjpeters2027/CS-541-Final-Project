@@ -16,6 +16,7 @@ numpy
 scipy
 scikit-learn
 pandas
+pyarrow
 
 # Image processing
 Pillow
@@ -27,7 +28,12 @@ tqdm
 tensorboard
 
 # Dataset downloads
+requests
+pyarrow
 kagglehub
+kaggle
+requests
+kaggle
 
 # Other
 pyyaml

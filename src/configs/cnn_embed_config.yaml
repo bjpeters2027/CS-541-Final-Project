@@ -1,18 +1,24 @@
+seed: 541
+output_dir: "src/artifacts"
+
 model:
   backbone: "resnet18"
   weights: "IMAGENET1K_V1"
+  embedding_archive: "label_embeddings.npz"
   embedding_paths:
     Word2Vec: ""
     BERT: ""
 
 data:
-  datafile: "data_cnn_embed"
-  test_split: 0.2
+  manifest: "imagenet.parquet"
+  seen_classes: "seen.json"
   val_split: 0.1
+  num_workers: 0
 
 training_args:
   batch_size: 32
   epochs: 20
+  device: "auto"
 
 hyperparameters:
   learning_rate: 0.0001
