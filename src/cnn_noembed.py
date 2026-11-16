@@ -1,7 +1,7 @@
 from collections.abc import Mapping
 import torch
 from torch import nn
-from FrozenResNet import FrozenResNet18
+from src.FrozenResNet import FrozenResNet18
 
 class CNNNoEmbed(nn.Module):
 

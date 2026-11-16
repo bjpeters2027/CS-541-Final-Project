@@ -10,7 +10,7 @@ import json
 
 from src.utils.enums.embedding_enums import Embedding
 
-from src.cnn_embed import initialize_model as initialize_model_embed
+from src.cnn_embed import CNNEmbed, initialize_model as initialize_model_embed
 from src.cnn_noembed import initialize_model as initialize_model_noembed
 
 from src.utils.enums.model_name_enums import Models
@@ -21,6 +21,16 @@ from src.utils.load_data import load_data
 from src.utils.load_model import save_model
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+def forward_and_loss(model, inputs, labels, criterion):
+    if isinstance(model, CNNEmbed) and isinstance(criterion, nn.CosineEmbeddingLoss):
+        embeddings = model.encode_images(inputs)
+        targets = model.class_embeddings[labels]
+        positive_pairs = embeddings.new_ones(labels.shape)
+        loss = criterion(embeddings, targets, positive_pairs)
+        return model.score_embeddings(embeddings), loss
+    logits = model(inputs)
+    return logits, criterion(logits, labels)
 
 def test_model(model, test_data, criterion):
     """
@@ -42,8 +52,7 @@ def test_model(model, test_data, criterion):
             correct = 0
             total = 0
             
-            logits = model(inputs)
-            loss = criterion(logits, labels)
+            logits, loss = forward_and_loss(model, inputs, labels, criterion)
             running_test_loss += loss.item()
             
             _, predictions = torch.max(torch.softmax(logits, dim=1), 1)
@@ -79,8 +88,7 @@ def train_model(model, train_data, test_data, criterion, optimizer, epochs):
             inputs, labels = inputs.to(device), labels.to(device)
             
             optimizer.zero_grad()
-            outputs = model(inputs)
-            loss = criterion(outputs, labels)
+            _, loss = forward_and_loss(model, inputs, labels, criterion)
             loss.backward()
             optimizer.step()
             running_train_loss += loss.item()
@@ -148,19 +156,19 @@ def initializer(model_name, embedding_choice, loss_choice):
         modelArchitecture = Models.CNN_EMBED
         config = load_config(f"{Models.CNN_EMBED}_config")
         
-        if embedding_choice == 1:
+        if str(embedding_choice) == "1":
             embeddingModel = Embedding.WORD2VEC
             model = initialize_model_embed(Embedding.WORD2VEC, config)
-        elif embedding_choice == 2:
+        elif str(embedding_choice) == "2":
             embeddingModel = Embedding.BERT
             model = initialize_model_embed(Embedding.BERT, config)
         else:
             print("Invalid embedding choice. Please select either 1 or 2.")
             sys.exit(1)
         
-        if loss_choice == 1:
+        if str(loss_choice) == "1":
             criterion = nn.CrossEntropyLoss()
-        elif loss_choice == 2:
+        elif str(loss_choice) == "2":
             criterion = nn.CosineEmbeddingLoss()
         else:
             print("Invalid loss choice. Please select either 1 or 2.")

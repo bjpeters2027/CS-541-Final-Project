@@ -1,3 +1,10 @@
+model:
+  backbone: "resnet18"
+  weights: "IMAGENET1K_V1"
+  embedding_paths:
+    Word2Vec: ""
+    BERT: ""
+
 data:
   datafile: "data_cnn_embed"
   test_split: 0.2
