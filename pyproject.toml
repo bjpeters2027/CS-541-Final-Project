@@ -3,6 +3,7 @@ name = "dlproject-dataprep"
 version = "0.1.0"
 requires-python = ">=3.10"
 dependencies = [
+    "remotezip>=0.12.6",
     "numpy",
     "pandas",
     "pyarrow",
