@@ -50,16 +50,20 @@ def find_archive() -> Path:
     return zips[0]
 
 
-def load_synset_mapping(archive: zipfile.ZipFile) -> dict[str, str]:
-    mapping = {}
+def load_synset_mapping(archive: zipfile.ZipFile) -> tuple[dict[str, str], dict[str, str]]:
+    """Returns {wnid: class name} and {wnid: the class's other ImageNet synonyms, comma-separated}.
+    scripts/06 falls back to the synonyms when Word2Vec has no vector for the class name."""
+    mapping, synonyms = {}, {}
     with archive.open(SYNSET_MAPPING_NAME) as f:
         for line in io.TextIOWrapper(f, encoding="utf-8"):
             wnid, _, names = line.strip().partition(" ")
             if wnid:
-                mapping[wnid] = CLASS_NAME_OVERRIDES.get(wnid, names.split(",")[0].strip())
+                first, *others = [name.strip() for name in names.split(",")]
+                mapping[wnid] = CLASS_NAME_OVERRIDES.get(wnid, first)
+                synonyms[wnid] = ", ".join(others)
     if len(set(mapping.values())) != len(mapping):
         raise ValueError("ImageNet class names are not unique; extend CLASS_NAME_OVERRIDES.")
-    return mapping
+    return mapping, synonyms
 
 
 def load_val_labels(archive: zipfile.ZipFile) -> dict[str, str]:
@@ -81,7 +85,7 @@ def main() -> None:
     archive_path = find_archive()
     rows = []
     with zipfile.ZipFile(archive_path) as archive:
-        synset_to_name = load_synset_mapping(archive)
+        synset_to_name, synset_to_synonyms = load_synset_mapping(archive)
         val_labels = load_val_labels(archive)
         partitions = load_partitions(archive)
 
@@ -119,6 +123,7 @@ def main() -> None:
 
     manifest = pd.DataFrame(rows)
     manifest["class_name"] = manifest["wnid"].map(synset_to_name)
+    manifest["synonyms"] = manifest["wnid"].map(synset_to_synonyms)
 
     MANIFESTS_DIR.mkdir(parents=True, exist_ok=True)
     manifest.to_parquet(MANIFESTS_DIR / "imagenet.parquet", index=False)

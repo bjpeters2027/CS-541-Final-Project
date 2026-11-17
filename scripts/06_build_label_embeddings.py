@@ -6,7 +6,6 @@ so this is the only place either one is ever loaded. Writes:
   - embeddings/seen_<Word2Vec|BERT>.pt: one row per seen class, in seen.json
     order, which CNNEmbed loads as its fixed training vocabulary
 """
-import json
 import re
 import sys
 from pathlib import Path
@@ -21,26 +20,39 @@ from src.utils.enums.embedding_enums import Embedding
 from src.utils.label_embeddings import load_class_split, load_label_embeddings
 
 
-def load_all_labels() -> list[str]:
-    labels: set[str] = set()
+def load_all_labels() -> dict[str, list[str]]:
+    """Returns {class name: alternative names}; only ImageNet classes have alternatives."""
+    labels: dict[str, list[str]] = {}
     for path in SPLITS_DIR.glob("*.json"):
-        data = json.loads(path.read_text())
-        classes = data["classes"] if isinstance(data, dict) and "classes" in data else data
-        for c in classes:
-            labels.add(c["class_name"])
-    return sorted(labels)
+        for c in load_class_split(path):
+            synonyms = c.get("synonyms") or ""
+            labels[c["class_name"]] = [s.strip() for s in synonyms.split(",") if s.strip()]
+    return dict(sorted(labels.items()))
 
 
-def build_word2vec_embeddings(labels: list[str]) -> dict[str, np.ndarray]:
+def word2vec_vectors(model, name: str) -> list[np.ndarray]:
+    # GoogleNews vectors are case-sensitive; try each word as written, lowercased, then capitalized.
+    vectors = []
+    for word in re.findall(r"[A-Za-z0-9]+", name):
+        for form in (word, word.lower(), word.capitalize()):
+            if form in model:
+                vectors.append(model[form])
+                break
+    return vectors
+
+
+def build_word2vec_embeddings(labels: dict[str, list[str]]) -> dict[str, np.ndarray]:
     import gensim.downloader as gensim_api
 
     model = gensim_api.load(WORD2VEC_MODEL_NAME)
     embeddings: dict[str, np.ndarray] = {}
     oov = []
-    for label in labels:
-        # GoogleNews vectors are case-sensitive; try each word as written, then lowercased.
-        words = re.findall(r"[A-Za-z0-9]+", label)
-        vectors = [model[w] if w in model else model[w.lower()] for w in words if w in model or w.lower() in model]
+    for label, synonyms in labels.items():
+        # Use the first of the class name and its synonyms that has any in-vocabulary word.
+        for name in (label, *synonyms):
+            vectors = word2vec_vectors(model, name)
+            if vectors:
+                break
         if not vectors:
             oov.append(label)
             continue
@@ -50,7 +62,7 @@ def build_word2vec_embeddings(labels: list[str]) -> dict[str, np.ndarray]:
     return embeddings
 
 
-def build_bert_embeddings(labels: list[str]) -> dict[str, np.ndarray]:
+def build_bert_embeddings(labels) -> dict[str, np.ndarray]:
     tokenizer = AutoTokenizer.from_pretrained(BERT_MODEL_NAME)
     model = AutoModel.from_pretrained(BERT_MODEL_NAME)
     model.eval()
@@ -71,11 +83,12 @@ def build_bert_embeddings(labels: list[str]) -> dict[str, np.ndarray]:
 
 
 def main() -> None:
-    labels = load_all_labels()
-    if not labels:
+    synonyms = load_all_labels()
+    if not synonyms:
         raise RuntimeError(f"No labels found in {SPLITS_DIR}. Run scripts/05 first.")
+    labels = list(synonyms)
 
-    word2vec = build_word2vec_embeddings(labels)
+    word2vec = build_word2vec_embeddings(synonyms)
     bert = build_bert_embeddings(labels)
 
     missing_bert = [l for l in labels if l not in bert]
@@ -94,11 +107,16 @@ def main() -> None:
     print(f"embedded {len(labels)} labels ({missing_w2v} missing word2vec/OOV) -> {EMBEDDINGS_DIR}")
 
     seen_names = [c["class_name"] for c in load_class_split(SPLITS_DIR / "seen.json")]
+    incomplete = []
     for embedding in Embedding:
         rows, kept = load_label_embeddings(EMBEDDINGS_DIR / "label_embeddings.npz", embedding, seen_names)
         if len(kept) != len(seen_names):
-            raise RuntimeError(f"Every seen class needs a {embedding.value} embedding to train on.")
+            incomplete.append(embedding.value)
+            continue
         torch.save(rows, EMBEDDINGS_DIR / f"seen_{embedding.value}.pt")
+    if incomplete:
+        # The other embedding's training tensor is still written, so its experiments can run.
+        raise RuntimeError(f"Every seen class needs an embedding to train on; seen_*.pt not written for {incomplete}.")
 
 
 if __name__ == "__main__":

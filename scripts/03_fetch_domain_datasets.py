@@ -121,13 +121,12 @@ def fetch_domain_subset(domain: str, url: str) -> None:
     raw_dir = DOMAIN_RAW_DIRS[domain]
     raw_dir.mkdir(parents=True, exist_ok=True)
     subset_path = raw_dir / f"{domain}.zip"
-    if subset_path.exists():
-        print(f"{domain}: subset already staged at {subset_path}, skipping download.")
+    # A full archive staged by an earlier version of this script also works: scripts/04
+    # indexes zip or tar, and evaluation only uses the unseen classes.
+    staged = [path for path in raw_dir.iterdir() if path.suffix in (".zip", ".tar")]
+    if staged:
+        print(f"{domain}: already staged at {staged[0]}, skipping download.")
         return
-    stale = [path for path in raw_dir.iterdir() if path.suffix in (".zip", ".tar", ".tgz")]
-    if stale:
-        sys.exit(f"{domain}: remove the previously staged full archive(s) {stale} first; "
-                 "scripts/04 reads whichever archive it finds in that folder.")
 
     unseen = load_unseen_classes(domain)
     rng = random.Random(f"{RANDOM_SEED}-{domain}")

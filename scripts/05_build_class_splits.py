@@ -32,7 +32,7 @@ def build_imagenet_splits() -> tuple[list[dict], list[dict]]:
     manifest = pd.read_parquet(MANIFESTS_DIR / "imagenet.parquet")
 
     def classes_with(partition: str) -> list[dict]:
-        rows = manifest.loc[manifest["partition"] == partition, ["wnid", "class_name"]]
+        rows = manifest.loc[manifest["partition"] == partition, ["wnid", "class_name", "synonyms"]]
         return rows.drop_duplicates().sort_values("wnid").to_dict("records")
 
     return classes_with("train"), classes_with("test_unseen")
