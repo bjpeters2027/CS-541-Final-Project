@@ -7,6 +7,7 @@ from src.utils.enums.path_enums import Paths
 
 from src.train import train_experiment
 from src.train import initializer
+from src.evalutate import evaluate
 
 if __name__ == "__main__":
     if (len(sys.argv) < 2):
@@ -22,6 +23,7 @@ if __name__ == "__main__":
         sys.exit(1)
     else:
         if train:
+            embedding_choice, loss_choice = None, None
             if model_choice == Models.CNN_EMBED:
                 print("Select Embedding Model:")
                 print("1. Word2Vec")
@@ -35,11 +37,13 @@ if __name__ == "__main__":
             train_experiment(experiment_name, *initializer(model_choice, embedding_choice, loss_choice))
             
         else:
-            model_path = Path(Paths.CLASSIFIERS)
+            model_path = Path(Paths.MODELS)
             print("Select the model to evaluate:")
             for idx, model_file in enumerate(model_path.glob("*.pt")):
                 print(f"{idx + 1}. {model_file.name}")
             model_choice = int(input("Enter your choice: ")) - 1
             model_file = list(model_path.glob("*.pt"))[model_choice]
 
-            # TODO: Load model and evaluate it
+            results = evaluate(model_file.stem)
+            for metric, value in results.items():
+                print(f"{metric}: {value:.4f}")

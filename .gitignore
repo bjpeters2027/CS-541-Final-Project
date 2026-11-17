@@ -205,6 +205,12 @@ cython_debug/
 # Temporary file for partial code execution
 tempCodeRunnerFile.py
 
+# Downloaded datasets and generated training outputs
+data/
+raw/
+src/artifacts/results/
+src/artifacts/models/*.pt
+
 # Ruff stuff:
 .ruff_cache/
 

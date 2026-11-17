@@ -8,7 +8,7 @@ from torch import nn
 from torchvision.models import ResNet18_Weights, resnet18
 import yaml
 
-from FrozenResNet import FrozenResNet18
+from src.FrozenResNet import FrozenResNet18
 from src.cnn_noembed import CNNNoEmbed, initialize_model
 
 
@@ -77,7 +77,7 @@ class CNNNoEmbedTests(unittest.TestCase):
             )
 
     def test_pretrained_weights_are_requested(self) -> None:
-        with patch("src.backbone.resnet18", return_value=resnet18(weights=None)) as factory:
+        with patch("src.FrozenResNet.resnet18", return_value=resnet18(weights=None)) as factory:
             backbone = FrozenResNet18()
         factory.assert_called_once_with(weights=ResNet18_Weights.IMAGENET1K_V1)
         self.assertEqual(backbone.output_dim, 512)
@@ -96,7 +96,7 @@ class CNNNoEmbedTests(unittest.TestCase):
         # Exercise the actual factory without downloading pretrained weights.
         config["model"]["weights"] = None
         model = initialize_model(config)
-        self.assertEqual(model.classifier.out_features, 1000)
+        self.assertEqual(model.classifier.out_features, 800)
         self.assertEqual(model.classifier.in_features, 512)
 
     def test_invalid_configuration_fails_explicitly(self) -> None:

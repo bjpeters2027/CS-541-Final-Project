@@ -1,10 +1,10 @@
 from collections.abc import Mapping
-from pathlib import Path
 
 import torch
 from torch import nn
 from torch.nn import functional as F
 
+from config import EMBEDDINGS_DIR
 from src.FrozenResNet import FrozenResNet18
 from src.utils.enums.embedding_enums import Embedding
 
@@ -100,8 +100,9 @@ def initialize_model(
             f"Set model.embedding_paths.{embedding_type.value} to a class-embedding .pt file."
         )
     
+    # Relative paths are inside the data prep embeddings/ folder; absolute paths are used as-is.
     class_embeddings = torch.load(
-        Path(embedding_path), map_location="cpu", weights_only=True
+        EMBEDDINGS_DIR / embedding_path, map_location="cpu", weights_only=True
     )
     
     return CNNEmbed(class_embeddings, weights=model_config["weights"])

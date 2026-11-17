@@ -34,6 +34,10 @@ case "$EMBEDDING_MODEL" in
     bert)
         EMBEDDING_CHOICE=2
         ;;
+    N/A)
+        # cnn_noembed has no embedding model and always uses cross-entropy.
+        EMBEDDING_CHOICE=0
+        ;;
     *)
         echo "Invalid embedding model: $EMBEDDING_MODEL" >&2
         exit 1
@@ -46,6 +50,10 @@ case "$LOSS_FUNCTION" in
         ;;
     cosine)
         LOSS_CHOICE=2
+        ;;
+    N/A)
+        # cnn_noembed has no embedding model and always uses cross-entropy.
+        LOSS_CHOICE=0
         ;;
     *)
         echo "Invalid loss function: $LOSS_FUNCTION" >&2

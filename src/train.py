@@ -72,7 +72,7 @@ def train_model(model, train_data, test_data, criterion, optimizer, epochs):
     Args:
         model (nn.Module): The model we are training
         train_data (dl.DataLoader): The data loader containing the training data
-        test_data (dl.DataLoader): The data loader containing the testing data
+        test_data (dl.DataLoader): The data loader evaluated after each epoch (the validation partition)
         criterion (nn.Module): The loss function used compute the loss
         optimizer (torch.optim.Optimizer): The optimizer used to update the model's parameters
         epochs (int): The number of epochs we will train over
@@ -100,7 +100,7 @@ def train_model(model, train_data, test_data, criterion, optimizer, epochs):
         test_losses.append(running_test_loss)
         test_accuracies.append(running_test_accuracy)
                 
-        print(f"Epoch [{epoch+1}/{epochs}], Training Loss: {running_train_loss/len(train_data):.4f}, Test Loss: {running_test_loss/len(test_data):.4f}, Test Accuracy: {running_test_accuracy/len(test_data):.4f}")
+        print(f"Epoch [{epoch+1}/{epochs}], Training Loss: {running_train_loss/len(train_data):.4f}, Validation Loss: {running_test_loss:.4f}, Validation Accuracy: {running_test_accuracy:.4f}")
     
     return train_losses, test_losses, test_accuracies
 
@@ -115,6 +115,7 @@ def save_metrics(train_losses, test_losses, test_accuracies, filename="metrics")
         filename (str, optional): Name of the JSON file to save the metrics. Defaults to "metrics".
     """
     
+    Path(Paths.RESULTS).mkdir(parents=True, exist_ok=True)
     output_path=f"{Paths.RESULTS}/{filename}.json"
     
     metrics = {
@@ -131,19 +132,24 @@ def train_experiment(experimentname, criterion, model, config, modelArchitecture
     Run the experiment: trains models, saves results.
     """
     
+    torch.manual_seed(config["seed"])
     model = model.to(device)
     
     data_config = config["data"]
     training_args = config["training_args"]
     hyperparameters = config["hyperparameters"]
     
-    train_loader, test_loader, val_loader = load_data(data_config["datafile"], training_args["batch_size"], data_config["test_split"], data_config["val_split"])
+    # The seen-class test partition is held out for src/evalutate.py.
+    train_loader, val_loader, _, num_classes = load_data(data_config, training_args["batch_size"], config["seed"])
+    model_classes = model.class_embeddings.shape[0] if isinstance(model, CNNEmbed) else model.classifier.out_features
+    if model_classes != num_classes:
+        raise ValueError(f"The model predicts {model_classes} classes but there are {num_classes} seen classes.")
     
     optimizer = torch.optim.Adam(model.parameters(), lr=hyperparameters["learning_rate"])
     
     epochs = training_args["epochs"]
     
-    train_losses, test_losses, test_accuracies = train_model(model, train_loader, test_loader, criterion, optimizer, epochs)
+    train_losses, test_losses, test_accuracies = train_model(model, train_loader, val_loader, criterion, optimizer, epochs)
     
     save_metrics(train_losses, test_losses, test_accuracies, filename=f"{experimentname}_metrics")
     
@@ -179,6 +185,7 @@ def initializer(model_name, embedding_choice, loss_choice):
         config = load_config(f"{Models.CNN_NOEMBED}_config")
         
         model = initialize_model_noembed(config)
+        criterion = nn.CrossEntropyLoss()
         
     return criterion, model, config, modelArchitecture, embeddingModel
 

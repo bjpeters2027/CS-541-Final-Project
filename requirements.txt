@@ -27,6 +27,9 @@ tqdm
 tensorboard
 
 # Dataset downloads
+huggingface_hub
+requests
+pyarrow
 kagglehub
 
 # Other

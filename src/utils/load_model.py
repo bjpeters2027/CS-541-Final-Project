@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import torch
 
 from src.cnn_embed import initialize_model as initialize_model_embed
@@ -44,12 +46,14 @@ def save_model(model, filename, modelArchitecture, config=None, experimentName=N
         embeddingModel (str): name of the embedding model being used, if applicable. Default (None)
     """
     
+    Path(Paths.MODELS).mkdir(parents=True, exist_ok=True)
     output_path=f"{Paths.MODELS}/{filename}.pt"
+    # Plain string keys and values, not enum members, so the checkpoint loads with torch.load's default weights_only=True.
     save = {
-        Saves.ARCHITECTURE: modelArchitecture,
-        Saves.EMBEDDING: embeddingModel,
-        Saves.CONFIG: config,
-        Saves.EXPERIMENT: experimentName,
-        Saves.STATE: model.state_dict()
+        Saves.ARCHITECTURE.value: str(modelArchitecture),
+        Saves.EMBEDDING.value: None if embeddingModel is None else str(embeddingModel),
+        Saves.CONFIG.value: config,
+        Saves.EXPERIMENT.value: experimentName,
+        Saves.STATE.value: model.state_dict()
     }
     torch.save(save, output_path)
