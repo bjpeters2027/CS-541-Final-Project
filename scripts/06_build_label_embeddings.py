@@ -19,6 +19,24 @@ from config import BERT_MODEL_NAME, BERT_TEMPLATE, EMBEDDINGS_DIR, SPLITS_DIR, W
 from src.utils.enums.embedding_enums import Embedding
 from src.utils.label_embeddings import load_class_split, load_label_embeddings
 
+# Hand-written Word2Vec text for classes whose name and synonyms are all missing
+# from the GoogleNews vocabulary (agreed as a group). BERT still embeds the class
+# name itself.
+WORD2VEC_TEXT_OVERRIDES = {
+    "coucal": "ground cuckoo",
+    "jacamar": "iridescent tropical bird",
+    "kuvasz": "Hungarian sheepdog",
+    "EntleBucher": "Swiss cattle dog",
+    "cuirass": "steel body armor",
+    "pickelhaube": "spiked helmet",
+    "agaric": "gilled mushroom",
+    "gyromitra": "false morel",
+    "limpkin": "wading bird",
+    "dowitcher": "long-billed shorebird",
+    "groenendael": "Belgian sheepdog",
+    "Sayornis": "tyrant flycatcher",  # CUB
+}
+
 
 def load_all_labels() -> dict[str, list[str]]:
     """Returns {class name: alternative names}; only ImageNet classes have alternatives."""
@@ -48,8 +66,11 @@ def build_word2vec_embeddings(labels: dict[str, list[str]]) -> dict[str, np.ndar
     embeddings: dict[str, np.ndarray] = {}
     oov = []
     for label, synonyms in labels.items():
-        # Use the first of the class name and its synonyms that has any in-vocabulary word.
-        for name in (label, *synonyms):
+        # Use the first of the class name, its synonyms, and its override that has any in-vocabulary word.
+        names = [label, *synonyms]
+        if label in WORD2VEC_TEXT_OVERRIDES:
+            names.append(WORD2VEC_TEXT_OVERRIDES[label])
+        for name in names:
             vectors = word2vec_vectors(model, name)
             if vectors:
                 break

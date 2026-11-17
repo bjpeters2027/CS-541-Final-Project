@@ -46,10 +46,12 @@ data, so run them from a login node. Downloads go to `/scratch/$USER/raw` and
 derived files (manifests, splits, embeddings) to `data/`; override these with
 `DATAPREP_RAW_ROOT` and `DATAPREP_DATA_ROOT`.
 
-1. `scripts/01_fetch_imagenet.py`: packs the ImageNet validation images (needs
-   Hugging Face access to `ILSVRC/imagenet-1k`) and chooses the 800 seen and
-   200 unseen classes. Each seen class gets 30 train, 10 validation, and 10
-   test_seen images; every unseen-class image is test_unseen.
+1. `scripts/01_fetch_imagenet.py`: packs the ImageNet validation images and
+   chooses the 800 seen and 200 unseen classes. Each seen class gets 30 train, 10 validation, and 10
+   test_seen images; every unseen-class image is test_unseen. Needs a Hugging
+   Face account that has accepted the `ILSVRC/imagenet-1k` terms: run
+   `hf auth login` once, or `export HF_TOKEN=...` (a `.env` file is not loaded
+   automatically). No other script needs credentials.
 2. `scripts/02_build_imagenet_manifest.py`: indexes those images and partitions.
 3. `scripts/03_fetch_domain_datasets.py`: stages 20 images per class of AWA2,
    CUB, and SUN, plus the Xian et al. proposed split that marks which classes are
