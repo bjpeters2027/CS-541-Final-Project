@@ -27,7 +27,10 @@ from importlib import import_module
 from pathlib import Path
 
 import requests
+import urllib3
 from remotezip import RemoteZip
+from requests.adapters import HTTPAdapter
+from urllib3.util import Retry
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from config import (
@@ -44,11 +47,20 @@ IMAGES_PER_CLASS = 20
 MAX_BYTES = 7_000_000_000
 
 
-def download(url: str, dest: Path) -> None:
-    with requests.get(url, stream=True, timeout=60) as response:
-        response.raise_for_status()
-        with open(dest, "wb") as f:
-            shutil.copyfileobj(response.raw, f, length=1024 * 1024)
+def download(url: str, dest: Path, attempts: int = 5) -> None:
+    # These university servers sometimes stall mid-download; resume where it stopped.
+    for attempt in range(attempts):
+        try:
+            headers = {"Range": f"bytes={dest.stat().st_size}-"} if dest.exists() else {}
+            with requests.get(url, stream=True, timeout=60, headers=headers) as response:
+                response.raise_for_status()
+                with open(dest, "ab" if response.status_code == 206 else "wb") as f:
+                    shutil.copyfileobj(response.raw, f, length=1024 * 1024)
+            return
+        except (requests.RequestException, urllib3.exceptions.HTTPError) as exc:
+            if attempt == attempts - 1:
+                raise
+            print(f"download interrupted ({exc}); resuming", flush=True)
 
 
 def write_subset(source, domain: str, destination: Path) -> None:
@@ -107,8 +119,11 @@ def fetch_domain_archive(domain: str, url: str) -> None:
 
     if suffix == ".zip":
         print(f"{domain}: downloading a subset from {url} -> {subset_path}")
-        with requests.Session() as session, RemoteZip(url, session=session, timeout=300) as source:
-            write_subset(source, domain, subset_path)
+        with requests.Session() as session:
+            # The AWA2 server sometimes drops a connection during the ~1,000 range requests.
+            session.mount("https://", HTTPAdapter(max_retries=Retry(total=5, backoff_factor=2)))
+            with RemoteZip(url, session=session, timeout=300) as source:
+                write_subset(source, domain, subset_path)
         return
 
     with tempfile.TemporaryDirectory(dir=raw_dir) as staging:
