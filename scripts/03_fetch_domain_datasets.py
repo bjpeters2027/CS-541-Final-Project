@@ -1,37 +1,37 @@
-"""Stage a small evaluation subset of the three out-of-domain datasets (AWA2,
-CUB-200-2011, SUN attributes), plus Xian et al.'s official "proposed split"
-(PS) class lists, which are what guarantee these classes don't overlap with
-ImageNet-1k.
-
-Only the PS test (unseen) classes are ever used for evaluation, so only those
-are kept, capped at config.DOMAIN_IMAGES_PER_CLASS randomly chosen images per
-class. Each domain's subset is written to raw/<domain>/<domain>.zip using the
-original archive's member paths, so scripts/04 indexes it unchanged.
+"""Stage the three out-of-domain eval datasets (AWA2, CUB-200-2011, SUN
+attributes) plus Xian et al.'s official "proposed split" (PS) class lists,
+which are what guarantee these classes don't overlap with ImageNet-1k.
 
 Images come from each dataset's own official source (verified directly, not a
 possibly-stale Kaggle mirror):
-  - AWA2: a ~14GB .zip whose server supports HTTP range requests, so only the
-    chosen images are downloaded (see dataprep/http_zip.py).
-  - CUB / SUN: a ~1.2GB / ~1.8GB .tar.gz each, which has no random access, so
-    each is streamed once and only the chosen images are kept. Nothing else is
-    written to disk.
+  - AWA2: a .zip -- left compressed; scripts/04 reads it directly with zipfile.
+  - CUB / SUN: a .tar.gz each. tar.gz can't be read with random access without
+    re-decompressing from the start every time, which doesn't scale to
+    per-image reads during training. So each is decompressed exactly once to
+    a plain, uncompressed .tar (one file in, one file out -- the individual
+    images are never written to disk separately) so dataprep.archive_dataset
+    can later seek members directly.
 
 Run this from a login-node shell, not inside an sbatch job -- compute nodes on
 many HPC clusters have no outbound internet access.
 """
+import gzip
 import random
+import shutil
 import sys
 import tarfile
+import tempfile
 import zipfile
 from collections import defaultdict
+from importlib import import_module
 from pathlib import Path
 
 import requests
+from remotezip import RemoteZip
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from config import (
     DOMAIN_DOWNLOAD_URLS,
-    DOMAIN_IMAGES_PER_CLASS,
     DOMAIN_RAW_DIRS,
     PS_SPLIT_FILES,
     RANDOM_SEED,
@@ -39,121 +39,119 @@ from config import (
     XLSA17_URL,
     ZSL_SPLITS_DIR,
 )
-from dataprep.domains import CLASSIFY
-from dataprep.http_zip import open_remote_zip
+
+IMAGES_PER_CLASS = 20
+MAX_BYTES = 7_000_000_000
+
+
+def download(url: str, dest: Path) -> None:
+    with requests.get(url, stream=True, timeout=60) as response:
+        response.raise_for_status()
+        with open(dest, "wb") as f:
+            shutil.copyfileobj(response.raw, f, length=1024 * 1024)
+
+
+def write_subset(source, domain: str, destination: Path) -> None:
+    is_zip = isinstance(source, zipfile.ZipFile)
+    classify = import_module("scripts.04_build_domain_manifests").CLASSIFY[domain]
+    groups = defaultdict(list)
+    members = source.infolist() if is_zip else source.getmembers()
+    for member in members:
+        name = member.filename if is_zip else member.name
+        class_name = classify(name)
+        if class_name is not None:
+            groups[class_name].append((name, member))
+    rng = random.Random(RANDOM_SEED)
+    selected = []
+    for class_name in sorted(groups):
+        candidates = sorted(groups[class_name], key=lambda entry: entry[0])
+        selected.extend(rng.sample(candidates, min(IMAGES_PER_CLASS, len(candidates))))
+    if is_zip:
+        for name, _ in selected.copy():
+            license_name = name.replace("/JPEGImages/", "/licenses/").rsplit(".", 1)[0] + ".txt"
+            try:
+                selected.append((license_name, source.getinfo(license_name)))
+            except KeyError:
+                pass
+    size = sum((m.file_size if is_zip else m.size) + 4096 for _, m in selected) + 10240
+    if not is_zip:
+        size += Path(source.name).stat().st_size
+    if size >= MAX_BYTES:
+        raise ValueError(f"{domain}: source plus subset would exceed 7 GB; reduce IMAGES_PER_CLASS.")
+    partial = destination.with_suffix(".partial")
+    open_archive = zipfile.ZipFile if is_zip else tarfile.open
+    with open_archive(partial, "w") as output:
+        for name, member in selected:
+            if is_zip:
+                output.writestr(name, source.read(member))
+            else:
+                with source.extractfile(member) as image:
+                    output.addfile(member, image)
+    partial.replace(destination)
+
+
+def fetch_domain_archive(domain: str, url: str) -> None:
+    raw_dir = DOMAIN_RAW_DIRS[domain]
+    raw_dir.mkdir(parents=True, exist_ok=True)
+
+    suffix = ".zip" if url.endswith(".zip") else ".tgz"
+    archive_path = raw_dir / f"{domain}{suffix}"
+    tar_path = raw_dir / f"{domain}.tar"
+    subset_path = raw_dir / f"{domain}_subset{'.zip' if suffix == '.zip' else '.tar'}"
+
+    if any(p.suffix in (".zip", ".tar", ".tgz", ".gz") and p != subset_path for p in raw_dir.iterdir()):
+        raise RuntimeError(f"Move or delete old archives in {raw_dir} before creating the subset.")
+    if subset_path.exists():
+        print(f"{domain}: already staged in {raw_dir}, skipping download.")
+        return
+
+    if suffix == ".zip":
+        print(f"{domain}: downloading a subset from {url} -> {subset_path}")
+        with requests.Session() as session, RemoteZip(url, session=session, timeout=300) as source:
+            write_subset(source, domain, subset_path)
+        return
+
+    with tempfile.TemporaryDirectory(dir=raw_dir) as staging:
+        archive_path = Path(staging) / archive_path.name
+        tar_path = Path(staging) / tar_path.name
+        print(f"{domain}: downloading {url} -> {archive_path}")
+        download(url, archive_path)
+        print(f"{domain}: decompressing to a plain .tar for random-access reads")
+        with gzip.open(archive_path, "rb") as src, open(tar_path, "wb") as dst:
+            shutil.copyfileobj(src, dst, length=8 * 1024 * 1024)
+        archive_path.unlink()  # re-downloadable; no need to keep both forms
+        with tarfile.open(tar_path, "r") as source:
+            write_subset(source, domain, subset_path)
 
 
 def fetch_proposed_splits() -> None:
-    missing = [
-        domain for domain in XLSA17_DATASET_DIRS
-        if not all((ZSL_SPLITS_DIR / domain / name).exists() for name in PS_SPLIT_FILES)
-    ]
-    if not missing:
-        return
+    ZSL_SPLITS_DIR.mkdir(parents=True, exist_ok=True)
     try:
-        with open_remote_zip(XLSA17_URL) as archive:
-            for domain in missing:
-                out_dir = ZSL_SPLITS_DIR / domain
-                out_dir.mkdir(parents=True, exist_ok=True)
-                for filename in PS_SPLIT_FILES:
-                    member_name = f"xlsa17/data/{XLSA17_DATASET_DIRS[domain]}/{filename}"
-                    (out_dir / filename).write_bytes(archive.read(member_name))
-                print(f"{domain}: proposed-split class lists -> {out_dir}")
+        # Only the small class-list files are fetched, via HTTP range requests.
+        source = RemoteZip(XLSA17_URL, timeout=300)
     except requests.RequestException as exc:
-        sys.exit(
+        print(
             f"Could not reach {XLSA17_URL} ({exc}). Download xlsa17.zip manually and "
             f"place xlsa17/data/<DATASET>/{{trainvalclasses,testclasses}}.txt under "
-            f"{ZSL_SPLITS_DIR}/<domain>/ for domain in {list(XLSA17_DATASET_DIRS)}."
+            f"{ZSL_SPLITS_DIR}/<domain>/ for domain in {list(XLSA17_DATASET_DIRS)}.",
+            file=sys.stderr,
         )
-
-
-def load_unseen_classes(domain: str) -> set[str]:
-    path = ZSL_SPLITS_DIR / domain / "testclasses.txt"
-    return {line.strip() for line in path.read_text().splitlines() if line.strip()}
-
-
-def select_from_remote_zip(url: str, domain: str, unseen: set[str], rng: random.Random):
-    classify = CLASSIFY[domain]
-    with open_remote_zip(url) as archive:
-        by_class = defaultdict(list)
-        for name in sorted(archive.namelist()):
-            if classify(name) in unseen:
-                by_class[classify(name)].append(name)
-        chosen = [
-            name
-            for class_name in sorted(by_class)
-            for name in rng.sample(by_class[class_name], min(DOMAIN_IMAGES_PER_CLASS, len(by_class[class_name])))
-        ]
-        print(f"{domain}: fetching {len(chosen)} images from {len(by_class)} unseen classes")
-        for index, name in enumerate(chosen, 1):
-            yield name, archive.read(name)
-            if index % 100 == 0:
-                print(f"{domain}: {index}/{len(chosen)}", flush=True)
-
-
-def select_from_streamed_tgz(url: str, domain: str, unseen: set[str], rng: random.Random):
-    # Reservoir-sample each class during a single pass, since a .tar.gz can only
-    # be read front to back.
-    classify = CLASSIFY[domain]
-    reservoirs = defaultdict(list)
-    seen_counts = defaultdict(int)
-    print(f"{domain}: streaming {url} (only unseen-class images are kept)")
-    with requests.get(url, stream=True, timeout=60) as response:
-        response.raise_for_status()
-        with tarfile.open(fileobj=response.raw, mode="r|gz") as archive:
-            for member in archive:
-                class_name = classify(member.name) if member.isfile() else None
-                if class_name not in unseen:
-                    continue
-                seen_counts[class_name] += 1
-                reservoir = reservoirs[class_name]
-                if len(reservoir) < DOMAIN_IMAGES_PER_CLASS:
-                    reservoir.append((member.name, archive.extractfile(member).read()))
-                else:
-                    slot = rng.randrange(seen_counts[class_name])
-                    if slot < DOMAIN_IMAGES_PER_CLASS:
-                        reservoir[slot] = (member.name, archive.extractfile(member).read())
-    for class_name in sorted(reservoirs):
-        yield from sorted(reservoirs[class_name])
-
-
-def fetch_domain_subset(domain: str, url: str) -> None:
-    raw_dir = DOMAIN_RAW_DIRS[domain]
-    raw_dir.mkdir(parents=True, exist_ok=True)
-    subset_path = raw_dir / f"{domain}.zip"
-    # A full archive staged by an earlier version of this script also works: scripts/04
-    # indexes zip or tar, and evaluation only uses the unseen classes.
-    staged = [path for path in raw_dir.iterdir() if path.suffix in (".zip", ".tar")]
-    if staged:
-        print(f"{domain}: already staged at {staged[0]}, skipping download.")
         return
 
-    unseen = load_unseen_classes(domain)
-    rng = random.Random(f"{RANDOM_SEED}-{domain}")
-    select = select_from_remote_zip if url.endswith(".zip") else select_from_streamed_tgz
-
-    partial_path = raw_dir / f"{domain}.partial"
-    count = 0
-    # JPEGs are already compressed, so store them as-is.
-    with zipfile.ZipFile(partial_path, "w", zipfile.ZIP_STORED) as subset:
-        for name, data in select(url, domain, unseen, rng):
-            subset.writestr(name, data)
-            count += 1
-    if count == 0:
-        partial_path.unlink()
-        raise RuntimeError(
-            f"{domain}: no images matched the {len(unseen)} unseen classes in "
-            f"testclasses.txt. The archive layout may not match dataprep/domains.py."
-        )
-    partial_path.replace(subset_path)
-    size_mb = subset_path.stat().st_size / 1e6
-    print(f"{domain}: {count} images ({size_mb:.0f} MB) -> {subset_path}")
+    with source:
+        for domain, dataset_dir in XLSA17_DATASET_DIRS.items():
+            out_dir = ZSL_SPLITS_DIR / domain
+            out_dir.mkdir(parents=True, exist_ok=True)
+            for filename in PS_SPLIT_FILES:
+                data = source.read(f"xlsa17/data/{dataset_dir}/{filename}")
+                (out_dir / filename).write_bytes(data)
+            print(f"{domain}: proposed-split class lists -> {out_dir}")
 
 
 def main() -> None:
-    fetch_proposed_splits()
     for domain, url in DOMAIN_DOWNLOAD_URLS.items():
-        fetch_domain_subset(domain, url)
+        fetch_domain_archive(domain, url)
+    fetch_proposed_splits()
 
 
 if __name__ == "__main__":

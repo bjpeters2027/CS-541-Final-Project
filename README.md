@@ -51,8 +51,9 @@ derived files (manifests, splits, embeddings) to `data/`; override these with
    200 unseen classes. Each seen class gets 30 train, 10 validation, and 10
    test_seen images; every unseen-class image is test_unseen.
 2. `scripts/02_build_imagenet_manifest.py`: indexes those images and partitions.
-3. `scripts/03_fetch_domain_datasets.py`: stages up to 50 images per unseen
-   class of AWA2, CUB, and SUN (Xian et al. proposed split) for transfer evaluation.
+3. `scripts/03_fetch_domain_datasets.py`: stages 20 images per class of AWA2,
+   CUB, and SUN, plus the Xian et al. proposed split that marks which classes are
+   unseen, for transfer evaluation. Move or delete older full archives first.
 4. `scripts/04_build_domain_manifests.py`: indexes the domain images.
 5. `scripts/05_build_class_splits.py`: writes the seen/unseen class splits.
 6. `scripts/06_build_label_embeddings.py`: builds the Word2Vec and BERT label embeddings.

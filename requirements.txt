@@ -27,6 +27,7 @@ tqdm
 tensorboard
 
 # Dataset downloads
+remotezip>=0.12.6
 huggingface_hub
 requests
 pyarrow

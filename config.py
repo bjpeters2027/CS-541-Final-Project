@@ -47,10 +47,6 @@ PS_SPLIT_FILES = ("trainvalclasses.txt", "testclasses.txt")
 
 RANDOM_SEED = int(os.environ.get("DATAPREP_SEED", "541"))
 
-# scripts/03 keeps only the unseen (proposed-split test) classes of each domain
-# dataset, and at most this many randomly chosen images per class.
-DOMAIN_IMAGES_PER_CLASS = int(os.environ.get("DATAPREP_DOMAIN_IMAGES_PER_CLASS", "50"))
-
 WORD2VEC_MODEL_NAME = "word2vec-google-news-300"
 BERT_MODEL_NAME = "bert-base-uncased"
 BERT_TEMPLATE = "a photo of a {label}."
