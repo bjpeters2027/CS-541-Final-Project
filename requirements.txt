@@ -28,7 +28,12 @@ tqdm
 tensorboard
 
 # Dataset downloads
+huggingface_hub
+requests
+pyarrow
 kagglehub
+kaggle
+six
 
 # Other
 pyyaml
