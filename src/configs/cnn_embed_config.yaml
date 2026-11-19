@@ -16,7 +16,3 @@ training_args:
 
 hyperparameters:
   learning_rate: 0.0001
-
-embedding_paths:
-    Word2Vec: "/home/bjpeters/archive/ImageNet/embeddings/word2vec.pt"
-    BERT: "/home/bjpeters/archive/ImageNet/embeddings/bert.pt"
