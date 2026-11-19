@@ -31,3 +31,7 @@ kagglehub
 
 # Other
 pyyaml
+
+# Setting up turing
+kaggle
+six

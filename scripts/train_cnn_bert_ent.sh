@@ -1,5 +1,5 @@
-
 #!/usr/bin/env bash
+
 
 #SBATCH --job-name=cs541_train
 #SBATCH --partition=academic

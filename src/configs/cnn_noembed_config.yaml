@@ -6,7 +6,7 @@ model:
   num_classes: 1000
 
 data:
-  datafile: "data_cnn_noembed"
+  datafile: "imagenet_train.csv"
   test_split: 0.2
   val_split: 0.1
 

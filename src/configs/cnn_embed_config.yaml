@@ -6,7 +6,7 @@ model:
     BERT: ""
 
 data:
-  datafile: "data_cnn_embed"
+  datafile: "imagenet_train.csv"
   test_split: 0.2
   val_split: 0.1
 
@@ -16,3 +16,7 @@ training_args:
 
 hyperparameters:
   learning_rate: 0.0001
+
+embedding_paths:
+    Word2Vec: "/home/bjpeters/archive/ImageNet/embeddings/word2vec.pt"
+    BERT: "/home/bjpeters/archive/ImageNet/embeddings/bert.pt

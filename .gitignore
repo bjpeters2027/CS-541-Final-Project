@@ -218,3 +218,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Generated ImageNet manifests
+/src/artifacts/data/imagenet_train.csv
+/src/artifacts/data/imagenet_classes.csv

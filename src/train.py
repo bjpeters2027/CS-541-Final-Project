@@ -100,8 +100,13 @@ def train_model(model, train_data, test_data, criterion, optimizer, epochs):
         test_losses.append(running_test_loss)
         test_accuracies.append(running_test_accuracy)
                 
-        print(f"Epoch [{epoch+1}/{epochs}], Training Loss: {running_train_loss/len(train_data):.4f}, Test Loss: {running_test_loss/len(test_data):.4f}, Test Accuracy: {running_test_accuracy/len(test_data):.4f}")
-    
+        print(
+            f"Epoch [{epoch + 1}/{epochs}], "
+            f"Training Loss: {train_losses[-1]:.4f}, "
+            f"Test Loss: {running_test_loss:.4f}, "
+            f"Test Accuracy: {running_test_accuracy:.4f}"
+        )
+        
     return train_losses, test_losses, test_accuracies
 
 def save_metrics(train_losses, test_losses, test_accuracies, filename="metrics"):
@@ -115,7 +120,8 @@ def save_metrics(train_losses, test_losses, test_accuracies, filename="metrics")
         filename (str, optional): Name of the JSON file to save the metrics. Defaults to "metrics".
     """
     
-    output_path=f"{Paths.RESULTS}/{filename}.json"
+    output_path = Path(Paths.RESULTS) / f"{filename}.json"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     
     metrics = {
         "train_losses": train_losses,
@@ -179,6 +185,7 @@ def initializer(model_name, embedding_choice, loss_choice):
         config = load_config(f"{Models.CNN_NOEMBED}_config")
         
         model = initialize_model_noembed(config)
+        criterion = nn.CrossEntropyLoss()
         
     return criterion, model, config, modelArchitecture, embeddingModel
 
