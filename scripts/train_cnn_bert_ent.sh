@@ -1,4 +1,3 @@
-
 #!/usr/bin/env bash
 
 #SBATCH --job-name=cs541_train
@@ -19,7 +18,7 @@ set -euo pipefail
 # ==========================================================
 
 MODEL_NAME="cnn_embed"
-EXPERIMENT_NAME="cnn_bert_ent_MM-DD-YYYY"
+EXPERIMENT_NAME="${EXPERIMENT_NAME:-cnn_bert_ent_$(date +%m-%d-%Y_%H-%M-%S)}"
 EMBEDDING_MODEL="bert"
 LOSS_FUNCTION="cross_entropy"
 
@@ -57,9 +56,17 @@ esac
 # ENVIRONMENT SETUP
 # ==========================================================
 
-cd "${SLURM_SUBMIT_DIR:?Submit from project root}"
+cd "${SLURM_SUBMIT_DIR:-$(dirname "${BASH_SOURCE[0]}")/..}"
+
+if [[ -z "${SLURM_JOB_ID:-}" ]]; then
+    echo "Requesting a 10-minute interactive GPU allocation; press Ctrl+C after verifying training starts."
+    exec srun --partition=academic --nodes=1 --ntasks=1 --cpus-per-task=4 \
+        --mem=32G --gres=gpu:1 --time=00:10:00 --pty \
+        bash "$PWD/scripts/$(basename "${BASH_SOURCE[0]}")" "$@"
+fi
 
 module load python
+module load cuda
 
 source .venv/bin/activate
 
@@ -105,7 +112,7 @@ PY
 # RUN TRAINING
 # ==========================================================
 
-srun python -u -m src.train \
+python -u -m src.train \
     "$EXPERIMENT_NAME" \
     "$MODEL_NAME" \
     "$EMBEDDING_CHOICE" \
