@@ -1,227 +1,298 @@
-# How to train our models on Turing
+# How to train our model on Turing
 
-## 1. Connect and clone the repository
+## 1. Connect to Turing and clone the repo
 
-From your own computer, connect from the WPI network and use your WPI credentials when prompted. Replace YOUR_WPI_USERNAME with your username. Turing access instructions
-```bash
+From your local terminal, replace YOUR_WPI_USERNAME with your WPI username.
+
 ssh YOUR_WPI_USERNAME@turing.wpi.edu
-```
 
-On the Turing login node:
-```bash
-cd "$HOME"
+On Turing, clone the dev branch if you do not already have the project.
+
 git clone --branch dev https://github.com/bjpeters2027/CS-541-Final-Project.git
-cd CS-541-Final-Project
-```
+cd ~/CS-541-Final-Project
 
-If you already cloned dev, run git pull --ff-only from that checkout before making the personal config changes below.
+## 2. Set up Python and Kaggle
 
-## 2. Start a Slurm session and install dependencies
+Start an interactive Slurm session to download and prepare the data on a compute node.
 
-Request a compute shell from the login node. Use it for installs, downloads, extraction, and manifest generation. If the allocation expires, start another and reload the module and environment before continuing.
-```bash
 srun --partition=academic --ntasks=1 --cpus-per-task=2 \
-  --mem=4G --time=03:00:00 --pty bash -l
-```
+  --mem=8G --time=03:00:00 --pty bash -l
 
-Inside the allocation:
+From that session, load Python, create the virtual environment, and install the dependencies. On subsequent sessions, load the same Python module and activate the existing environment.
 
-```bash
-cd "$HOME/CS-541-Final-Project"
+cd ~/CS-541-Final-Project
 module load python/3.12.10
-python3 -m venv .venv
+python -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
-python -m pip check
-```
 
+Sign in to Kaggle. If Kaggle denies the download, check that your account has accepted the competition rules.
+
+kaggle auth login
 
 ## 3. Download and extract ImageNet
 
-Accept the ImageNet competition rules in a browser on your own computer. Then authenticate from your Slurm shell with the command below and follow the prompts using your local browser. Ask the team whether there is already an approved, compute-readable shared copy before downloading another one. ImageNet competition data · Kaggle CLI authentication
-```bash
-kaggle auth login --no-launch-browser
-```
+Skip this section if the images are already extracted under ~/archive/ImageNet/ILSVRC/Data/CLS-LOC/train/.
 
-Check your scratch quota before downloading. You’ll need room for both the ZIP and the extracted images.
-
-```bash
-export DATA_DIR="/scratch/$USER/ImageNet"
+DATA_DIR="$HOME/archive/ImageNet"
 mkdir -p "$DATA_DIR"
 
 kaggle competitions download \
   -c imagenet-object-localization-challenge \
   -p "$DATA_DIR"
-```
 
-If Slurm stops the download, retry in a new allocation using the same destination and omit --force so the CLI can attempt to resume. Once the download finishes, extract the training images with Python.
+Extract the training images from the ZIP using Python.
 
-```bash
 python -u - <<'PY'
-import os
 from pathlib import Path
 from zipfile import ZipFile
 
-root = Path(os.environ["DATA_DIR"])
+archive = Path.home() / "archive/ImageNet"
+zip_path = archive / "imagenet-object-localization-challenge.zip"
 prefix = "ILSVRC/Data/CLS-LOC/train/"
-suffixes = {".jpeg", ".jpg", ".png"}
+image_suffixes = {".jpeg", ".jpg", ".png"}
 
-with ZipFile(root / "imagenet-object-localization-challenge.zip") as archive:
-    entries = [
-        entry for entry in archive.infolist()
+with ZipFile(zip_path) as source:
+    members = [
+        entry for entry in source.infolist()
         if entry.filename.startswith(prefix)
         and not entry.is_dir()
-        and Path(entry.filename).suffix.lower() in suffixes
+        and Path(entry.filename).suffix.lower() in image_suffixes
     ]
-    if not entries:
+    if not members:
         raise SystemExit(f"No training images found under {prefix}")
 
-    print(f"Extracting {len(entries):,} training images")
-    for count, entry in enumerate(entries, start=1):
-        archive.extract(entry, root)
+    print(f"Extracting {len(members):,} images to {archive}")
+    for count, entry in enumerate(members, start=1):
+        source.extract(entry, archive)
         if count % 50_000 == 0:
-            print(f"Extracted {count:,} / {len(entries):,}")
+            print(f"Extracted {count:,} / {len(members):,}")
 
-print(f"Training images: {root / prefix}")
+print(f"Training folder: {archive / prefix}")
 PY
-```
-## 4. Generate the manifests and check a batch
 
-Still inside Slurm, run from the repository root. If you’re using a shared extraction, set TRAIN_DIR to its train directory.
-```bash
-cd "$HOME/CS-541-Final-Project"
-export TRAIN_DIR="$DATA_DIR/ILSVRC/Data/CLS-LOC/train"
+## 4. Build the manifests and test the data loader
+
+Run from the repo root with .venv active.
+
+cd ~/CS-541-Final-Project
+python -m src.utils.make_imagenet_manifest \
+  "$HOME/archive/ImageNet/ILSVRC/Data/CLS-LOC/train"
+python -m src.utils.check_imagenet_batch
+
+The manifest command writes src/artifacts/data/imagenet_train.csv with image paths and numeric labels. It also writes src/artifacts/data/imagenet_classes.csv with the corresponding label-to-synset mapping. Keep these files together. Embedding tensor row i must correspond to numeric label i in these manifests.
+
+The no-embedding baseline can go straight to Step 7 after the batch check passes.
+
+## 5. Generate class embeddings
+
+### Create the class-name CSV
+
+Generate ~/archive/ImageNet/imagenet_class_names.csv by matching the training manifest’s synset IDs to the published names. The join uses synset IDs because the published index and this project can assign different numeric labels. ImageNet class index
 
 python - <<'PY'
 import csv
-import os
+import json
+from pathlib import Path
+from urllib.request import urlopen
+
+classes_path = Path("src/artifacts/data/imagenet_classes.csv")
+output = Path.home() / "archive/ImageNet/imagenet_class_names.csv"
+url = "https://storage.googleapis.com/download.tensorflow.org/data/imagenet_class_index.json"
+
+with urlopen(url, timeout=30) as response:
+    index = json.load(response)
+names = {synset: name.replace("_", " ") for synset, name in index.values()}
+
+with classes_path.open(newline="") as file:
+    classes = sorted(csv.DictReader(file), key=lambda row: int(row["label"]))
+
+if [int(row["label"]) for row in classes] != list(range(1000)):
+    raise SystemExit(f"Expected class IDs 0 through 999 in {classes_path}")
+
+synsets = [row["synset"] for row in classes]
+missing = [synset for synset in synsets if not names.get(synset)]
+if missing:
+    raise SystemExit(f"Missing names for {len(missing)} synsets: {missing[:5]}")
+
+with output.open("w", newline="") as file:
+    writer = csv.writer(file)
+    writer.writerow(["synset", "name"])
+    writer.writerows((synset, names[synset]) for synset in synsets)
+
+print(f"Wrote {len(synsets)} class names to {output}")
+PY
+
+### Generate BERT embeddings
+
+This step uses bert-base-uncased. The first run may need network access to download the tokenizer and model. It saves one 768-dimensional vector per class in numeric label order. For BERT training, skip the Word2Vec step.
+
+python - <<'PY'
+import csv
+from pathlib import Path
+
+import torch
+from transformers import AutoModel, AutoTokenizer
+
+archive = Path.home() / "archive/ImageNet"
+classes_path = Path("src/artifacts/data/imagenet_classes.csv")
+names_path = archive / "imagenet_class_names.csv"
+output = archive / "embeddings/bert.pt"
+
+with classes_path.open(newline="") as file:
+    classes = sorted(csv.DictReader(file), key=lambda row: int(row["label"]))
+with names_path.open(newline="") as file:
+    names = {row["synset"]: row["name"].strip() for row in csv.DictReader(file)}
+
+if [int(row["label"]) for row in classes] != list(range(1000)):
+    raise SystemExit(f"Expected class IDs 0 through 999 in {classes_path}")
+missing = [row["synset"] for row in classes if not names.get(row["synset"])]
+if missing:
+    raise SystemExit(f"Missing names for {len(missing)} synsets: {missing[:5]}")
+
+labels = [names[row["synset"]] for row in classes]
+tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+model = AutoModel.from_pretrained("bert-base-uncased").eval()
+rows = []
+
+with torch.inference_mode():
+    for start in range(0, len(labels), 32):
+        batch = tokenizer(
+            labels[start:start + 32],
+            padding=True,
+            truncation=True,
+            return_special_tokens_mask=True,
+            return_tensors="pt",
+        )
+        special_tokens = batch.pop("special_tokens_mask").bool()
+        mask = (batch["attention_mask"].bool() & ~special_tokens).unsqueeze(-1)
+        hidden = model(**batch).last_hidden_state
+        rows.append((hidden * mask).sum(dim=1) / mask.sum(dim=1).clamp_min(1))
+
+embeddings = torch.cat(rows)
+output.parent.mkdir(parents=True, exist_ok=True)
+torch.save(embeddings, output)
+print(f"Wrote {output} with shape {tuple(embeddings.shape)}")
+PY
+
+### Generate Word2Vec embeddings if needed
+
+Place GoogleNews-vectors-negative300.bin in ~/archive/ImageNet/ before running this step. Load the full vocabulary in a compute session with enough memory.
+
+python - <<'PY'
+import csv
 import re
 from pathlib import Path
 
-root = Path(os.environ["TRAIN_DIR"]).resolve(strict=True)
-classes = sorted(
-    p for p in root.iterdir()
-    if p.is_dir() and re.fullmatch(r"n\d{8}", p.name)
-)
-if len(classes) != 1000:
-    raise SystemExit(f"Expected 1,000 class folders in {root}, found {len(classes)}")
-
-output = Path("src/artifacts/data")
-output.mkdir(parents=True, exist_ok=True)
-count = 0
-
-with (
-    (output / "imagenet_classes.csv").open("w", newline="") as class_file,
-    (output / "imagenet_train.csv").open("w", newline="") as image_file,
-):
-    class_writer = csv.writer(class_file)
-    image_writer = csv.writer(image_file)
-    class_writer.writerow(["label", "synset"])
-    image_writer.writerow(["image_path", "label"])
-
-    for label, folder in enumerate(classes):
-        images = sorted(
-            p for p in folder.iterdir()
-            if p.is_file() and p.suffix.lower() in {".jpeg", ".jpg", ".png"}
-        )
-        if not images:
-            raise SystemExit(f"No images found in {folder}")
-        class_writer.writerow([label, folder.name])
-        image_writer.writerows((str(image), label) for image in images)
-        count += len(images)
-
-print(f"Wrote {count:,} images across {len(classes):,} classes")
-if count != 1_281_167:
-    raise SystemExit("Unexpected image count for full ImageNet. Check extraction before training.")
-PY
-```
-Both CNN configs on dev already use imagenet_train.csv. Keep the generated CSVs out of Git. They’re reproducible, and the image manifest contains paths specific to your Turing checkout.
-```bash
-python - <<'PY'
 import torch
-from src.utils.load_data import load_data
+from gensim.models import KeyedVectors
 
-train, test, val = load_data("imagenet_train.csv", batch_size=8)
-images, labels = next(iter(train))
+archive = Path.home() / "archive/ImageNet"
+with Path("src/artifacts/data/imagenet_classes.csv").open(newline="") as file:
+    classes = sorted(csv.DictReader(file), key=lambda row: int(row["label"]))
+with (archive / "imagenet_class_names.csv").open(newline="") as file:
+    names = {row["synset"]: row["name"].strip() for row in csv.DictReader(file)}
 
-assert tuple(images.shape) == (8, 3, 224, 224), images.shape
-assert labels.dtype == torch.long, labels.dtype
-assert ((labels >= 0) & (labels < 1000)).all(), labels
+if [int(row["label"]) for row in classes] != list(range(1000)):
+    raise SystemExit("Expected class IDs 0 through 999 in imagenet_classes.csv")
 
-print("Batch passed:", tuple(images.shape), labels.tolist())
-print("Split sizes:", len(train.dataset), len(test.dataset), len(val.dataset))
+vectors = KeyedVectors.load_word2vec_format(
+    str(archive / "GoogleNews-vectors-negative300.bin"), binary=True
+)
+rows = []
+
+for row in classes:
+    synset = row["synset"]
+    label = names.get(synset)
+    if not label:
+        raise SystemExit(f"Missing class name for {synset}")
+
+    tokens = re.findall(r"[A-Za-z0-9]+", label)
+    phrase = "_".join(tokens)
+    matches = [word for word in (phrase, phrase.lower()) if word in vectors][:1]
+    if not matches:
+        matches = [
+            word for token in tokens
+            for word in (token if token in vectors else token.lower(),)
+            if word in vectors
+        ]
+    if not matches:
+        raise SystemExit(f"No Word2Vec vocabulary match for {synset}: {label!r}")
+
+    rows.append(torch.stack([torch.from_numpy(vectors[word]) for word in matches]).mean(0))
+
+output = archive / "embeddings/word2vec.pt"
+output.parent.mkdir(parents=True, exist_ok=True)
+embeddings = torch.stack(rows)
+torch.save(embeddings, output)
+print(f"Wrote {output} with shape {tuple(embeddings.shape)}")
 PY
-```
-These splits are sampled from the extracted ImageNet training images. Report the resulting metrics as image-level holdout results. The official validation set and zero-shot evaluation require separate splits.
 
-## 5. Set up embeddings if you’re running BERT or Word2Vec
+## 6. Configure the embedding paths
 
-Skip this step for the baseline. For the embedding runs, use the team’s generated bert.pt and word2vec.pt if available. Check that their rows match imagenet_classes.csv in label order. Sharing the same tensors also keeps the label representations consistent across runs.
+Edit src/configs/cnn_embed_config.yaml. Place both file paths under model.embedding_paths and remove any duplicate top-level embedding_paths block. Use absolute paths. Keep the other model and training settings in the file.
 
-If you’re generating the tensors with the Python block in the draft, first obtain the team’s imagenet_class_names.csv with synset,name columns and the pretrained GoogleNews-vectors-negative300.bin file. The draft’s generator expects both files and needs access to BERT’s pretrained files on first use. Run it in Slurm using scratch paths and more memory than the 4 GB data-prep allocation for the Word2Vec load.
+To print a YAML fragment with the paths for your account, run:
 
-```bash
-export CLASS_NAMES="$DATA_DIR/imagenet_class_names.csv"
-export WORD2VEC_BIN="$DATA_DIR/GoogleNews-vectors-negative300.bin"
-export EMBEDDING_DIR="$DATA_DIR/embeddings"
-```
-
-In src/configs/cnn_embed_config.yaml, remove the extra top-level embedding_paths block. Put your actual absolute paths in the existing block under model. YAML does not expand $USER in these strings. You can leave the other entry empty if you’re running only one embedding type.
-```JSON
+cat <<EOF
 model:
   backbone: "resnet18"
   weights: "IMAGENET1K_V1"
   embedding_paths:
-    Word2Vec: "/scratch/YOUR_WPI_USERNAME/ImageNet/embeddings/word2vec.pt"
-    BERT: "/scratch/YOUR_WPI_USERNAME/ImageNet/embeddings/bert.pt"
-```
+    Word2Vec: "$HOME/archive/ImageNet/embeddings/word2vec.pt"
+    BERT: "$HOME/archive/ImageNet/embeddings/bert.pt"
+EOF
 
-In each embedding batch script you plan to use, change module load python to module load python/3.12.10 and include $SLURM_JOB_ID in EXPERIMENT_NAME. For example, the BERT cross-entropy script should use:
-```bash
-EXPERIMENT_NAME="cnn_bert_ent_${SLURM_JOB_ID}"
-```
+Before submitting BERT, verify that the config parses and points to a readable tensor.
 
-## 6. Submit training
+python - <<'PY'
+import os
 
-Exit the interactive Slurm shell and submit from the project root on the login node. For the first baseline job, set training_args.epochs to 1 in src/configs/cnn_noembed_config.yaml. A full ImageNet epoch is still substantial. Use its runtime to decide whether the planned run fits the partition’s time limit.
+from src.utils.load_config import load_config
 
-```bash
-exit
-cd "$HOME/CS-541-Final-Project"
-export PYTHON_MODULE=python/3.12.10
+path = load_config("cnn_embed_config")["model"]["embedding_paths"]["BERT"]
+if not path or not os.path.isfile(path) or not os.access(path, os.R_OK):
+    raise SystemExit(f"BERT tensor is missing or unreadable: {path!r}")
+print(f"BERT tensor: {path}")
+PY
 
+## 7. Submit training
+
+If you are still in the interactive compute session, run exit to return to the login node. Submit from the repo root. Run the command for the experiment you want to start.
+
+cd ~/CS-541-Final-Project
+
+# No-embedding baseline
 sbatch --partition=academic scripts/train_cnn_noembed.sh
-```
 
-Each model config requests pretrained ResNet-18 weights. The first run needs network access to download them or an existing Torch cache visible on the GPU node.
+# BERT with cross-entropy
+sbatch --partition=academic scripts/train_cnn_bert_ent.sh
 
-After the baseline succeeds, submit whichever embedding runs your team needs:
+Save the job ID printed by sbatch. The BERT launcher uses python/3.12.10 by default. If your virtual environment was built with a different module, supply that module at submission.
 
-| Experiment | Submit from the repository root |
-|---|---|
-| BERT + cross-entropy | sbatch --partition=academic scripts/train_cnn_bert_ent.sh |
-| BERT + cosine loss | sbatch --partition=academic scripts/train_cnn_bert_cos.sh |
-| Word2Vec + cross-entropy | sbatch --partition=academic scripts/train_cnn_word2vec_ent.sh |
-| Word2Vec + cosine loss | sbatch --partition=academic scripts/train_cnn_word2vec_cos.sh |
+PYTHON_MODULE=python/3.12.10 sbatch scripts/train_cnn_bert_ent.sh
 
-## 7. Monitor jobs and collect results
+## 8. Monitor training and find results
 
-Write down the job ID printed by sbatch. From the repository root on the login node, replace YOUR_JOB_ID with that number:
-```bash
-JOB_ID=YOUR_JOB_ID
-squeue -u "$USER"
-tail -n 30 "train-$JOB_ID.out" "train-$JOB_ID.err"
-sacct -j "$JOB_ID" --format=JobID,JobName,State,ExitCode,Elapsed
-```
+Replace 1234567 with the submitted job ID.
 
-PD means pending and R means running. A job can disappear from squeue after success or failure. Use the top-level job row in sacct to confirm COMPLETED and 0:0. Turing Slurm guide
+JOB_ID=1234567
+squeue -j "$JOB_ID"
+sacct -j "$JOB_ID" -X --format=JobID,JobName%24,State,ExitCode,Elapsed
+tail -n 30 "train-${JOB_ID}.out" "train-${JOB_ID}.err"
 
-For the baseline, verify both result files:
-```bash
-EXPERIMENT="cnn_noembed_${JOB_ID}"
-ls -lh \
-  "src/artifacts/results/${EXPERIMENT}_metrics.json" \
-  "src/artifacts/models/${EXPERIMENT}_model.pt"
-```
+If a job disappears from squeue, use sacct to find its final state. To list jobs from yesterday onward, pass an explicit date.
 
-For an embedding run, use its EXPERIMENT_NAME instead. The JSON contains per-epoch training loss, test loss, and test accuracy. The .pt file contains the trained model checkpoint and its configuration. Both files are saved at the end of training. Share the metrics JSON with the team and record the job ID, Git commit (git rev-parse --short HEAD), and settings alongside it so others can reproduce the run.
+sacct -u "$USER" -S "$(date -d yesterday +%F)" -X \
+  --format=JobID,JobName%24,State,ExitCode,Elapsed
+
+The trainer prints an Epoch line after completing both training and evaluation for that epoch. It writes the metrics and model after the final epoch.
+
+| Run | Metrics | Model |
+|---|---|---|
+| Baseline | src/artifacts/results/cnn_noembed_<jobid>_metrics.json | src/artifacts/models/cnn_noembed_<jobid>_model.pt |
+| BERT cross-entropy | src/artifacts/results/cnn_bert_ent_<jobid>_metrics.json | src/artifacts/models/cnn_bert_ent_<jobid>_model.pt |
+
+The default configuration runs 20 epochs. Use the time to the first completed epoch to estimate whether the run fits within the 12-hour Slurm limit. For a short end-to-end check, lower training_args.epochs in the experiment’s config before submitting. A timeout before the final epoch leaves no saved metrics or model with the current trainer.
+
+I used the Python 3.12.10 module from the existing guide as the launcher default. I haven’t run this launcher on Turing.

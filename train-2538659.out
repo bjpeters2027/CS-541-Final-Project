@@ -1,0 +1,35 @@
+==========================================
+SLURM JOB INFORMATION
+==========================================
+Job ID: 2538659
+Node: gpu-4-21.int.turing.wpi.edu
+Working directory: /home/bjpeters/CS-541-Final-Project
+Model: cnn_embed
+Experiment: cnn_bert_ent_MM-DD-YYYY
+Embedding: bert
+Loss: cross_entropy
+==========================================
+Python 3.12.10
+Thu Nov 19 14:14:26 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 595.71.05              Driver Version: 595.71.05      CUDA Version: 13.2     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA A30                     Off |   00000000:E3:00.0 Off |                    0 |
+| N/A   32C    P0             28W /  165W |       0MiB /  24576MiB |      0%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+PyTorch version: 2.15.0+cu132
+CUDA available: True
+GPU: NVIDIA A30

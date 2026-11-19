@@ -1,0 +1,3 @@
+Manifest: src/artifacts/data/imagenet_train.csv
+BERT tensor: /home/bjpeters/archive/ImageNet/embeddings/bert.pt
+GPU: NVIDIA A30

@@ -2,8 +2,8 @@ model:
   backbone: "resnet18"
   weights: "IMAGENET1K_V1"
   embedding_paths:
-    Word2Vec: ""
-    BERT: ""
+    Word2Vec: "/home/bjpeters/archive/ImageNet/embeddings/word2vec.pt"
+    BERT: "/home/bjpeters/archive/ImageNet/embeddings/bert.pt"
 
 data:
   datafile: "imagenet_train.csv"
@@ -19,4 +19,4 @@ hyperparameters:
 
 embedding_paths:
     Word2Vec: "/home/bjpeters/archive/ImageNet/embeddings/word2vec.pt"
-    BERT: "/home/bjpeters/archive/ImageNet/embeddings/bert.pt
+    BERT: "/home/bjpeters/archive/ImageNet/embeddings/bert.pt"
