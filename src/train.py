@@ -6,6 +6,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 import json
 
 from src.utils.enums.embedding_enums import Embedding
@@ -46,7 +47,7 @@ def test_model(model, test_data, criterion):
     running_test_accuracy = 0
     model.eval()
     with torch.no_grad():
-        for inputs, labels in test_data:
+        for inputs, labels in tqdm(test_data, desc="Validation", unit="batch", leave=False, mininterval=1.0):
             inputs, labels = inputs.to(device), labels.to(device)
             
             correct = 0
@@ -84,7 +85,7 @@ def train_model(model, train_data, test_data, criterion, optimizer, epochs):
     for epoch in range(epochs):
         running_train_loss = 0
         model.train()
-        for inputs, labels in train_data:
+        for inputs, labels in tqdm(train_data, desc=f"Epoch {epoch+1}/{epochs}", unit="batch", mininterval=1.0):
             inputs, labels = inputs.to(device), labels.to(device)
             
             optimizer.zero_grad()
@@ -100,7 +101,7 @@ def train_model(model, train_data, test_data, criterion, optimizer, epochs):
         test_losses.append(running_test_loss)
         test_accuracies.append(running_test_accuracy)
                 
-        print(f"Epoch [{epoch+1}/{epochs}], Training Loss: {running_train_loss/len(train_data):.4f}, Validation Loss: {running_test_loss:.4f}, Validation Accuracy: {running_test_accuracy:.4f}")
+        print(f"Epoch [{epoch+1}/{epochs}], Training Loss: {running_train_loss/len(train_data):.4f}, Validation Loss: {running_test_loss:.4f}, Validation Accuracy: {running_test_accuracy:.4f}", flush=True)
     
     return train_losses, test_losses, test_accuracies
 
@@ -140,10 +141,14 @@ def train_experiment(experimentname, criterion, model, config, modelArchitecture
     hyperparameters = config["hyperparameters"]
     
     # The seen-class test partition is held out for src/evalutate.py.
+    print("Loading the Data")
     train_loader, val_loader, _, num_classes = load_data(data_config, training_args["batch_size"], config["seed"])
+    print("Data Loaded")
     model_classes = model.class_embeddings.shape[0] if isinstance(model, CNNEmbed) else model.classifier.out_features
     if model_classes != num_classes:
         raise ValueError(f"The model predicts {model_classes} classes but there are {num_classes} seen classes.")
+
+    print(f"Device: {device} | Training batches: {len(train_loader)} | Validation batches: {len(val_loader)}", flush=True)
     
     optimizer = torch.optim.Adam(model.parameters(), lr=hyperparameters["learning_rate"])
     
@@ -151,7 +156,11 @@ def train_experiment(experimentname, criterion, model, config, modelArchitecture
     
     train_losses, test_losses, test_accuracies = train_model(model, train_loader, val_loader, criterion, optimizer, epochs)
     
+    print("Model Trained, Saving Metrics")
+    
     save_metrics(train_losses, test_losses, test_accuracies, filename=f"{experimentname}_metrics")
+    
+    print("Saving Model")
     
     save_model(model, f"{experimentname}_model", modelArchitecture, config=config, experimentName=experimentname, embeddingModel=embeddingModel)
 
