@@ -23,14 +23,14 @@ from src.utils.load_model import save_model
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def forward_and_loss(model, inputs, labels, criterion):
+def forward_and_loss(model, inputs, labels, criterion, temp = 1):
     if isinstance(model, CNNEmbed) and isinstance(criterion, nn.CosineEmbeddingLoss):
         embeddings = model.encode_images(inputs)
         targets = model.class_embeddings[labels]
         positive_pairs = embeddings.new_ones(labels.shape)
         loss = criterion(embeddings, targets, positive_pairs)
         return model.score_embeddings(embeddings), loss
-    logits = model(inputs)
+    logits = model(inputs) / temp
     return logits, criterion(logits, labels)
 
 def test_model(model, test_data, criterion):
