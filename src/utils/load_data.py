@@ -26,7 +26,10 @@ class ImageManifestDataset(Dataset):
             return self.transform(image.convert("RGB")), int(label)
 
 
-def load_data(filename, batch_size, test_split=0.2, validation_split=0.1):
+def load_data(filename, batch_size, test_split=0.2, validation_split=0.1, *, train_fraction=1.0):
+    if not 0 < train_fraction <= 1:
+        raise ValueError("Training fraction must be greater than 0 and at most 1.")
+
     manifest = Path(Paths.DATA) / filename
     if not manifest.is_file() and not manifest.suffix:
         manifest = manifest.with_suffix(".csv")
@@ -51,6 +54,14 @@ def load_data(filename, batch_size, test_split=0.2, validation_split=0.1):
         test_size=validation_split / held_out_fraction,
         random_state=42,
     )
+    if train_fraction < 1:
+        train_rows, _ = train_test_split(
+            train_rows,
+            train_size=train_fraction,
+            random_state=42,
+            stratify=train_rows["label"],
+        )
+
     transform = ResNet18_Weights.IMAGENET1K_V1.transforms()
 
     return (

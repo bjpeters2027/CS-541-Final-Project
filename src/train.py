@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 
@@ -143,7 +144,20 @@ def train_experiment(experimentname, criterion, model, config, modelArchitecture
     training_args = config["training_args"]
     hyperparameters = config["hyperparameters"]
     
-    train_loader, test_loader, val_loader = load_data(data_config["datafile"], training_args["batch_size"], data_config["test_split"], data_config["val_split"])
+    train_fraction = float(os.environ.get("TRAIN_FRACTION", "1.0"))
+    data_config["train_fraction"] = train_fraction
+    train_loader, test_loader, val_loader = load_data(
+        data_config["datafile"],
+        training_args["batch_size"],
+        data_config["test_split"],
+        data_config["val_split"],
+        train_fraction=train_fraction,
+    )
+    print(
+        f"Training fraction: {train_fraction:g}. "
+        f"Images: {len(train_loader.dataset):,} train, "
+        f"{len(test_loader.dataset):,} test, {len(val_loader.dataset):,} validation."
+    )
     
     optimizer = torch.optim.Adam(model.parameters(), lr=hyperparameters["learning_rate"])
     

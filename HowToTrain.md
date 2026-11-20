@@ -272,6 +272,19 @@ Save the job ID printed by sbatch. The BERT launcher uses python/3.12.10 by defa
 
 PYTHON_MODULE=python/3.12.10 sbatch scripts/train_cnn_bert_ent.sh
 
+### Train on 30% of the training split
+
+Use the existing ImageNet manifest from Step 4. Submit the baseline or BERT experiment from the repo root.
+
+```bash
+PYTHON_MODULE=python/3.12.10 TRAIN_FRACTION=0.30 \
+  sbatch --partition=academic scripts/train_cnn_noembed.sh
+
+TRAIN_FRACTION=0.30 sbatch --partition=academic scripts/train_cnn_bert_ent.sh
+```
+
+The trainer samples 30% of the training split with seed 42 and stratifies by ImageNet class. With the default 70/20/10 split, this uses about 21% of the manifest for training and evaluates on the original test split. The job log reports the image counts, and the model checkpoint records the fraction. The default fraction is 1.0.
+
 ## 8. Monitor training and find results
 
 Replace 1234567 with the submitted job ID.
