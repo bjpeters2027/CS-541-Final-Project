@@ -40,6 +40,20 @@ class ArchiveBackedImageDataset(Dataset):
     def __len__(self) -> int:
         return len(self.manifest)
 
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        del state["_local"]
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self._local = threading.local()
+
+    def close(self):
+        for archive in getattr(self._local, "archives", {}).values():
+            archive.close()
+        self._local.archives = {}
+
     @staticmethod
     def _read_bytes(archive, member_path: str) -> bytes:
         if isinstance(archive, zipfile.ZipFile):

@@ -1,4 +1,5 @@
 import torch
+from pathlib import Path
 
 from src.cnn_embed import initialize_model as initialize_model_embed
 from src.cnn_noembed import initialize_model as initialize_model_noembed
@@ -45,6 +46,7 @@ def save_model(model, filename, modelArchitecture, config=None, experimentName=N
     """
     
     output_path=f"{Paths.MODELS}/{filename}.pt"
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     save = {
         Saves.ARCHITECTURE: modelArchitecture,
         Saves.EMBEDDING: embeddingModel,

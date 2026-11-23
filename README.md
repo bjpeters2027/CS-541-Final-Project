@@ -37,3 +37,80 @@ Run the embedding tests from the project root (PowerShell):
 $env:PYTHONPATH = Join-Path (Get-Location) 'src'
 .\.venv\Scripts\python.exe -m unittest discover -s tests -p test_cnn_embed.py
 ```
+
+## Training and Optuna hyperparameter tuning
+
+Install dependencies into the project environment:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+Training now reads the archive-backed ImageNet parquet manifest and `seen.json`
+produced by the data preparation scripts. Configure `data.manifest` and
+`data.seen_classes` as explicit paths, or filenames resolved under
+`config.MANIFESTS_DIR` and `config.SPLITS_DIR`. Class IDs follow the **order of
+entries in `seen.json`**, so embedding tensor rows must follow that same order.
+Set the baseline's `model.num_classes` to the number of seen classes.
+
+The official ImageNet `val` partition is reserved for final testing.
+`data.val_split` holds out a seeded fraction of each seen class's **training**
+images for validation (at least one image each for training and validation).
+Unseen classes never enter these loaders. Each class needs at least two training
+images. Training uses random crops/flips; validation and testing are deterministic.
+
+Optuna minimizes **last-epoch validation loss** using TPE sampling. Each trial
+starts a fresh model with the same seed and image partitions. Epoch count stays
+fixed at `training_args.epochs`; only learning rate (log scale) and batch size are
+tuned. Defaults are 20 trials, learning rates from `1e-5` to `1e-2`, and batch sizes
+16, 32, or 64. Trials run sequentially and never evaluate test images.
+
+Run from the repository root:
+
+```powershell
+# Baseline model
+.\.venv\Scripts\python.exe -m src.tune cnn_noembed --trials 20 --output-dir src\artifacts\tuning\baseline
+
+# Embedding model: 1=Word2Vec, 2=BERT; loss 1=cross entropy, 2=cosine
+.\.venv\Scripts\python.exe -m src.tune cnn_embed --embedding 1 --loss 2 --trials 20 --output-dir src\artifacts\tuning\word2vec_cosine
+```
+
+Use `--config path\to\config.yaml` for a custom configuration, `--lr-min` and
+`--lr-max` for bounds, and `--batch-sizes 16 32` to restrict GPU memory use.
+Failed trials surface their errors and stop the command; they are not assigned
+fabricated scores. Choose a separate study for each model/embedding/loss setup;
+validation losses from different loss functions are not directly comparable.
+
+Each output directory contains:
+
+- `study.db`: persistent Optuna SQLite study, including failed trials.
+- `trials.csv`: trial parameters, scores, and states after a successful run.
+- `best_trial.json`: winning parameters and validation metrics.
+- `best_config.yaml`: original configuration with the winning learning rate and
+  batch size substituted. Source configurations are not overwritten.
+
+Repeating an identical command resumes the study and runs **additional** trials.
+Changing its configuration/search space requires another output directory or
+`--study-name`. Keep the referenced manifests, splits, and embeddings unchanged
+when resuming. Seeded runs preserve splits and initialization; GPU kernels and
+resumed sampler sequences are not guaranteed to match an uninterrupted run.
+
+Finally, train with the winning configuration and evaluate the held-out test set
+once, after training:
+
+```powershell
+.\.venv\Scripts\python.exe -m src.train baseline_best cnn_noembed --config src\artifacts\tuning\baseline\best_config.yaml
+.\.venv\Scripts\python.exe -m src.train word2vec_best cnn_embed 1 2 --config src\artifacts\tuning\word2vec_cosine\best_config.yaml
+```
+
+Normal training writes a checkpoint under `src/artifacts/models` and metrics under
+`src/artifacts/results`. Per-epoch metrics are now `train_losses`, `val_losses`,
+and `val_accuracies`; final test metrics are the scalars `test_loss` and
+`test_accuracy`, replacing the old per-epoch `test_losses`/`test_accuracies`.
+Tuning does not save model checkpoints; the final command creates one.
+
+Run model, loader, and tuning tests (synthetic images; no model downloads):
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests
+```

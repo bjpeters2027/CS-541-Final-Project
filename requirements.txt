@@ -9,7 +9,7 @@ gensim
 transformers
 
 # Hyperparameter optimization
-optuna
+optuna>=4
 
 # Numerical computation and evaluation
 numpy

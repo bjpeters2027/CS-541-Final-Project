@@ -22,6 +22,7 @@ if __name__ == "__main__":
         sys.exit(1)
     else:
         if train:
+            embedding_choice = loss_choice = None
             if model_choice == Models.CNN_EMBED:
                 print("Select Embedding Model:")
                 print("1. Word2Vec")

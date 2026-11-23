@@ -10,6 +10,8 @@ dependencies = [
     "pillow",
     "torch",
     "torchvision",
+    "optuna>=4",
+    "pyyaml",
     "gensim",
     "transformers",
     "requests",
