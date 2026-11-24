@@ -6,9 +6,8 @@ in-domain and out-of-domain generalization can be compared separately:
   - unseen_<domain>: AWA2 / CUB / SUN classes under their official Xian et al.
     proposed split, which is verified to have zero overlap with ImageNet-1k.
 
-Disjointness is asserted explicitly (by class id and by normalized label
-string) rather than assumed -- this is the exact leakage bug Background.md
-flags in the original (non-proposed) AWA split.
+Disjointness uses WordNet IDs when both classes have them, otherwise normalized
+label strings. Distinct ImageNet synsets can legitimately share a display name.
 """
 import argparse
 import json
@@ -26,10 +25,7 @@ from config import (
     RANDOM_SEED,
     SPLITS_DIR,
 )
-
-
-def normalize(label: str) -> str:
-    return label.strip().lower().replace("_", " ")
+from dataprep.class_splits import assert_disjoint
 
 
 def build_imagenet_splits(k: int, seed: int) -> tuple[list[dict], list[dict]]:
@@ -55,19 +51,6 @@ def build_domain_split(domain: str) -> list[dict]:
         .drop_duplicates()
         .to_dict("records")
     )
-
-
-def assert_disjoint(seen: list[dict], *unseen_groups: list[dict]) -> None:
-    seen_names = {normalize(c["class_name"]) for c in seen}
-    seen_wnids = {c.get("wnid") for c in seen if c.get("wnid")}
-    for group in unseen_groups:
-        for c in group:
-            name = normalize(c["class_name"])
-            assert name not in seen_names, (
-                f"leakage: {c['class_name']!r} appears in both seen and unseen sets"
-            )
-            if c.get("wnid"):
-                assert c["wnid"] not in seen_wnids, f"leakage: wnid {c['wnid']} in both sets"
 
 
 def main(k: int, seed: int) -> None:

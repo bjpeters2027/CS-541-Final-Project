@@ -53,6 +53,15 @@ produced by the data preparation scripts. Configure `data.manifest` and
 entries in `seen.json`**, so embedding tensor rows must follow that same order.
 Set the baseline's `model.num_classes` to the number of seen classes.
 
+Split generation and validation compare classes by WordNet ID when both entries
+have one. Different ImageNet synsets can share a display name (for example,
+the Cardigan dog and cardigan clothing); that alone is not class leakage.
+When either entry lacks an ID, as in the domain dataset splits, normalized
+class names are compared instead. Genuine overlap raises an explicit error.
+This does not disambiguate labels for text embeddings: the label-name-keyed
+embedding preparation still needs a separate disambiguation policy before
+experiments involving these ambiguous labels.
+
 The official ImageNet `val` partition is reserved for final testing.
 `data.val_split` holds out a seeded fraction of each seen class's **training**
 images for validation (at least one image each for training and validation).

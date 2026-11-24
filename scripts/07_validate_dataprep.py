@@ -1,8 +1,8 @@
 """Sanity checks across the whole data-prep pipeline. Run after every stage.
 
-Checks: manifest sizes, seen/unseen disjointness, every split label has a BERT
-embedding (word2vec OOV is only a warning), and a handful of images per
-manifest actually decode straight out of their zip archive.
+Checks: manifest sizes, seen/unseen disjointness by WordNet ID (or normalized
+name when IDs are unavailable), every split label has a BERT embedding
+(word2vec OOV is only a warning), and sample images decode from their archives.
 """
 import json
 import sys
@@ -14,6 +14,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from config import EMBEDDINGS_DIR, MANIFESTS_DIR, SPLITS_DIR
 from dataprep.archive_dataset import ArchiveBackedImageDataset
+from dataprep.class_splits import assert_disjoint
 
 
 def check_manifests() -> None:
@@ -31,11 +32,13 @@ def check_splits_disjoint() -> None:
     if not seen_path.exists():
         print(f"no splits found in {SPLITS_DIR} yet")
         return
-    seen_names = {c["class_name"].strip().lower() for c in json.loads(seen_path.read_text())["classes"]}
+    seen = json.loads(seen_path.read_text())["classes"]
     for path in sorted(SPLITS_DIR.glob("unseen_*.json")):
         unseen = json.loads(path.read_text())
-        overlap = seen_names & {c["class_name"].strip().lower() for c in unseen}
-        assert not overlap, f"{path.name} overlaps seen classes: {overlap}"
+        try:
+            assert_disjoint(seen, unseen)
+        except ValueError as exc:
+            raise ValueError(f"{path.name}: {exc}") from exc
     print("disjointness check passed")
 
 
