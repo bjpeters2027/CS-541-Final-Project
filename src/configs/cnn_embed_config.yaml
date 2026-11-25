@@ -1,6 +1,9 @@
+seed: 541
+
 model:
   backbone: "resnet18"
   weights: "IMAGENET1K_V1"
+  # Written by scripts/06_build_label_embeddings.py; relative to the data prep embeddings/ folder.
   embedding_paths:
     Word2Vec: "/home/bjpeters/archive/ImageNet/embeddings/word2vec.pt"
     BERT: "/home/bjpeters/archive/ImageNet/embeddings/bert.pt"

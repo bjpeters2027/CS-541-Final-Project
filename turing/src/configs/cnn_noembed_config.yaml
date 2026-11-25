@@ -1,0 +1,19 @@
+seed: 541
+
+model:
+  backbone: "resnet18"
+  weights: "IMAGENET1K_V1"
+  # Seen ImageNet classes chosen by scripts/01_fetch_imagenet.py.
+  num_classes: 800
+
+data:
+  manifest: "imagenet.parquet"
+  seen_classes: "seen.json"
+  num_workers: 0
+
+training_args:
+  batch_size: 32
+  epochs: 20
+
+hyperparameters:
+  learning_rate: 0.0001

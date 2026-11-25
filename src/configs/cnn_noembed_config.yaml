@@ -1,9 +1,10 @@
-seed: 42
+seed: 541
 
 model:
   backbone: "resnet18"
   weights: "IMAGENET1K_V1"
-  num_classes: 1000
+  # Seen ImageNet classes chosen by scripts/01_fetch_imagenet.py.
+  num_classes: 800
 
 data:
   datafile: "imagenet_train.csv"

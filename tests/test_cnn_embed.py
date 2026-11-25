@@ -134,6 +134,7 @@ class CNNEmbedTests(unittest.TestCase):
             config = yaml.safe_load(file)
         self.assertEqual(config["model"]["weights"], "IMAGENET1K_V1")
         for embedding_type in Embedding:
+            config["model"]["embedding_paths"][embedding_type.value] = ""
             with self.assertRaisesRegex(ValueError, "class-embedding"):
                 initialize_model(embedding_type, config)
         config["model"]["weights"] = None
