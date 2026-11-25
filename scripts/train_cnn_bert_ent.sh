@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-
-#SBATCH --job-name=cs541_train
+#SBATCH --job-name=cs541_bert_ent
 #SBATCH --partition=academic
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
 #SBATCH --gres=gpu:1
-#SBATCH --time=0-12:00:00
+#SBATCH --time=12:00:00
 #SBATCH --output=train-%j.out
 #SBATCH --error=train-%j.err
 
 set -euo pipefail
+cd "${SLURM_SUBMIT_DIR:?Submit from the project root}"
 
 # ==========================================================
 # EXPERIMENT CONFIGURATION
@@ -68,54 +68,45 @@ fi
 module load python
 module load cuda
 
+module load "${PYTHON_MODULE:-python/3.12.10}"
 source .venv/bin/activate
-
-export PYTHONUNBUFFERED=1
 export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-4}"
 
-# ==========================================================
-# JOB INFORMATION
-# ==========================================================
-
-echo "=========================================="
-echo "SLURM JOB INFORMATION"
-echo "=========================================="
-echo "Job ID: ${SLURM_JOB_ID:-unknown}"
-echo "Node: $(hostname)"
-echo "Working directory: $PWD"
-echo "Model: $MODEL_NAME"
-echo "Experiment: $EXPERIMENT_NAME"
-echo "Embedding: $EMBEDDING_MODEL"
-echo "Loss: $LOSS_FUNCTION"
-echo "=========================================="
-
-python --version
-nvidia-smi
-
-# ==========================================================
-# VERIFY GPU
-# ==========================================================
-
 python - <<'PY'
+from pathlib import Path
+
 import torch
 
-print("PyTorch version:", torch.__version__)
-print("CUDA available:", torch.cuda.is_available())
+from src.utils.enums.path_enums import Paths
+from src.utils.load_config import load_config
 
+config = load_config("cnn_embed_config")
+manifest = Path(Paths.DATA) / config["data"]["datafile"]
+bert_path = config["model"]["embedding_paths"]["BERT"]
+
+if not manifest.is_file():
+    raise SystemExit(f"Missing ImageNet manifest: {manifest}")
+if not bert_path or not Path(bert_path).is_file():
+    raise SystemExit(f"Missing BERT tensor: {bert_path!r}")
 if not torch.cuda.is_available():
-    raise SystemExit("ERROR: CUDA GPU unavailable.")
+    raise SystemExit("CUDA GPU unavailable")
 
-print("GPU:", torch.cuda.get_device_name(0))
-PY
-
-# ==========================================================
-# RUN TRAINING
-# ==========================================================
+embeddings = torch.load(bert_path, map_location="cpu", weights_only=True)
+if not isinstance(embeddings, torch.Tensor) or embeddings.shape != (1000, 768):
+    raise SystemExit(f"Expected a BERT tensor with shape (1000, 768): {bert_path}")
 
 python -u -m src.train \
     "$EXPERIMENT_NAME" \
     "$MODEL_NAME" \
     "$EMBEDDING_CHOICE" \
     "$LOSS_CHOICE"
+print(f"Manifest: {manifest}")
+print(f"BERT tensor: {bert_path}")
+print(f"GPU: {torch.cuda.get_device_name(0)}")
+PY
 
-echo "Training completed successfully."
+python -u -m src.train \
+    "cnn_bert_ent_${SLURM_JOB_ID}" \
+    cnn_embed \
+    2 \
+    1

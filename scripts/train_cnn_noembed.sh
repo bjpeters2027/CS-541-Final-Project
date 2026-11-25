@@ -1,13 +1,11 @@
 #!/usr/bin/env bash
-
-#SBATCH --job-name=cs541_train
-#SBATCH --partition=academic
+#SBATCH --job-name=cs541_baseline
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
 #SBATCH --gres=gpu:1
-#SBATCH --time=0-12:00:00
+#SBATCH --time=12:00:00
 #SBATCH --output=train-%j.out
 #SBATCH --error=train-%j.err
 
@@ -75,50 +73,16 @@ fi
 
 module load python
 module load cuda
+cd "${SLURM_SUBMIT_DIR:?Submit from the project root}"
+
+if [[ -n "${PYTHON_MODULE:-}" ]]; then
+    module load "$PYTHON_MODULE"
+fi
 
 source .venv/bin/activate
-
-export PYTHONUNBUFFERED=1
 export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-4}"
 
-# ==========================================================
-# JOB INFORMATION
-# ==========================================================
-
-echo "=========================================="
-echo "SLURM JOB INFORMATION"
-echo "=========================================="
-echo "Job ID: ${SLURM_JOB_ID:-unknown}"
-echo "Node: $(hostname)"
-echo "Working directory: $PWD"
-echo "Model: $MODEL_NAME"
-echo "Experiment: $EXPERIMENT_NAME"
-echo "Embedding: $EMBEDDING_MODEL"
-echo "Loss: $LOSS_FUNCTION"
-echo "=========================================="
-
-python --version
-nvidia-smi
-
-# ==========================================================
-# VERIFY GPU
-# ==========================================================
-
-python - <<'PY'
-import torch
-
-print("PyTorch version:", torch.__version__)
-print("CUDA available:", torch.cuda.is_available())
-
-if not torch.cuda.is_available():
-    raise SystemExit("ERROR: CUDA GPU unavailable.")
-
-print("GPU:", torch.cuda.get_device_name(0))
-PY
-
-# ==========================================================
-# RUN TRAINING
-# ==========================================================
+python -c 'import torch; assert torch.cuda.is_available(), "CUDA GPU unavailable"; print(torch.cuda.get_device_name(0))'
 
 python -u -m src.train \
     "$EXPERIMENT_NAME" \
@@ -127,3 +91,8 @@ python -u -m src.train \
     "$LOSS_CHOICE"
 
 echo "Training completed successfully."
+srun python -u -m src.train \
+    "cnn_noembed_${SLURM_JOB_ID}" \
+    cnn_noembed \
+    0 \
+    0

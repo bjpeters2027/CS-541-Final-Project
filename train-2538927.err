@@ -1,0 +1,69 @@
+Loading python/3.12.10/bgfyood
+  Loading requirement: gcc-runtime/13.2.0/yimvxxm bzip2/1.0.8/itttwfv
+    gcc-runtime/13.2.0/s3f7i6x libmd/1.0.4/ngvfltj libbsd/0.12.1/6of6olc
+    expat/2.6.2/zoq445h ncurses/6.4/zqsx2w2 readline/8.2/hmsgdsx
+    gdbm/1.23/gtrssid libiconv/1.17/pmxhi4x xz/5.4.6/uxouxrg
+    zlib-ng/2.1.5/uctcqfl libxml2/2.10.3/vdqe2g3 pigz/2.8/pmmdaqf
+    zstd/1.5.5/juuobg2 tar/1.34/5prin2y gettext/0.22.4/iy5z4el
+    libffi/3.4.4/vqf2avv libxcrypt/4.4.35/zvatbxx openssl/3.4.0/pholr53
+    sqlite/3.43.2/o22u32h util-linux-uuid/2.38.1/2x7vfxr
+Traceback (most recent call last):
+  File "<stdin>", line 8, in <module>
+  File "/home/bjpeters/CS-541-Final-Project/src/utils/load_config.py", line 8, in load_config
+    config = yaml.safe_load(file)
+             ^^^^^^^^^^^^^^^^^^^^
+  File "/home/bjpeters/CS-541-Final-Project/.venv/lib/python3.12/site-packages/yaml/__init__.py", line 125, in safe_load
+    return load(stream, SafeLoader)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/bjpeters/CS-541-Final-Project/.venv/lib/python3.12/site-packages/yaml/__init__.py", line 81, in load
+    return loader.get_single_data()
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/bjpeters/CS-541-Final-Project/.venv/lib/python3.12/site-packages/yaml/constructor.py", line 49, in get_single_data
+    node = self.get_single_node()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/bjpeters/CS-541-Final-Project/.venv/lib/python3.12/site-packages/yaml/composer.py", line 36, in get_single_node
+    document = self.compose_document()
+               ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/bjpeters/CS-541-Final-Project/.venv/lib/python3.12/site-packages/yaml/composer.py", line 55, in compose_document
+    node = self.compose_node(None, None)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/bjpeters/CS-541-Final-Project/.venv/lib/python3.12/site-packages/yaml/composer.py", line 84, in compose_node
+    node = self.compose_mapping_node(anchor)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/bjpeters/CS-541-Final-Project/.venv/lib/python3.12/site-packages/yaml/composer.py", line 133, in compose_mapping_node
+    item_value = self.compose_node(node, item_key)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/bjpeters/CS-541-Final-Project/.venv/lib/python3.12/site-packages/yaml/composer.py", line 84, in compose_node
+    node = self.compose_mapping_node(anchor)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/bjpeters/CS-541-Final-Project/.venv/lib/python3.12/site-packages/yaml/composer.py", line 133, in compose_mapping_node
+    item_value = self.compose_node(node, item_key)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/bjpeters/CS-541-Final-Project/.venv/lib/python3.12/site-packages/yaml/composer.py", line 64, in compose_node
+    if self.check_event(AliasEvent):
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/bjpeters/CS-541-Final-Project/.venv/lib/python3.12/site-packages/yaml/parser.py", line 98, in check_event
+    self.current_event = self.state()
+                         ^^^^^^^^^^^^
+  File "/home/bjpeters/CS-541-Final-Project/.venv/lib/python3.12/site-packages/yaml/parser.py", line 449, in parse_block_mapping_value
+    if not self.check_token(KeyToken, ValueToken, BlockEndToken):
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/bjpeters/CS-541-Final-Project/.venv/lib/python3.12/site-packages/yaml/scanner.py", line 116, in check_token
+    self.fetch_more_tokens()
+  File "/home/bjpeters/CS-541-Final-Project/.venv/lib/python3.12/site-packages/yaml/scanner.py", line 251, in fetch_more_tokens
+    return self.fetch_double()
+           ^^^^^^^^^^^^^^^^^^^
+  File "/home/bjpeters/CS-541-Final-Project/.venv/lib/python3.12/site-packages/yaml/scanner.py", line 655, in fetch_double
+    self.fetch_flow_scalar(style='"')
+  File "/home/bjpeters/CS-541-Final-Project/.venv/lib/python3.12/site-packages/yaml/scanner.py", line 666, in fetch_flow_scalar
+    self.tokens.append(self.scan_flow_scalar(style))
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/bjpeters/CS-541-Final-Project/.venv/lib/python3.12/site-packages/yaml/scanner.py", line 1151, in scan_flow_scalar
+    chunks.extend(self.scan_flow_scalar_spaces(double, start_mark))
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/bjpeters/CS-541-Final-Project/.venv/lib/python3.12/site-packages/yaml/scanner.py", line 1238, in scan_flow_scalar_spaces
+    raise ScannerError("while scanning a quoted scalar", start_mark,
+yaml.scanner.ScannerError: while scanning a quoted scalar
+  in "src/configs/cnn_embed_config.yaml", line 22, column 11
+found unexpected end of stream
+  in "src/configs/cnn_embed_config.yaml", line 22, column 62

@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 
@@ -101,8 +102,13 @@ def train_model(model, train_data, test_data, criterion, optimizer, epochs):
         test_losses.append(running_test_loss)
         test_accuracies.append(running_test_accuracy)
                 
-        print(f"Epoch [{epoch+1}/{epochs}], Training Loss: {running_train_loss/len(train_data):.4f}, Validation Loss: {running_test_loss:.4f}, Validation Accuracy: {running_test_accuracy:.4f}", flush=True)
-    
+        print(
+            f"Epoch [{epoch + 1}/{epochs}], "
+            f"Training Loss: {train_losses[-1]:.4f}, "
+            f"Test Loss: {running_test_loss:.4f}, "
+            f"Test Accuracy: {running_test_accuracy:.4f}"
+        )
+        
     return train_losses, test_losses, test_accuracies
 
 def save_metrics(train_losses, test_losses, test_accuracies, filename="metrics"):
@@ -116,8 +122,8 @@ def save_metrics(train_losses, test_losses, test_accuracies, filename="metrics")
         filename (str, optional): Name of the JSON file to save the metrics. Defaults to "metrics".
     """
     
-    Path(Paths.RESULTS).mkdir(parents=True, exist_ok=True)
-    output_path=f"{Paths.RESULTS}/{filename}.json"
+    output_path = Path(Paths.RESULTS) / f"{filename}.json"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     
     metrics = {
         "train_losses": train_losses,
@@ -149,6 +155,20 @@ def train_experiment(experimentname, criterion, model, config, modelArchitecture
         raise ValueError(f"The model predicts {model_classes} classes but there are {num_classes} seen classes.")
 
     print(f"Device: {device} | Training batches: {len(train_loader)} | Validation batches: {len(val_loader)}", flush=True)
+    train_fraction = float(os.environ.get("TRAIN_FRACTION", "1.0"))
+    data_config["train_fraction"] = train_fraction
+    train_loader, test_loader, val_loader = load_data(
+        data_config["datafile"],
+        training_args["batch_size"],
+        data_config["test_split"],
+        data_config["val_split"],
+        train_fraction=train_fraction,
+    )
+    print(
+        f"Training fraction: {train_fraction:g}. "
+        f"Images: {len(train_loader.dataset):,} train, "
+        f"{len(test_loader.dataset):,} test, {len(val_loader.dataset):,} validation."
+    )
     
     optimizer = torch.optim.Adam(model.parameters(), lr=hyperparameters["learning_rate"])
     
