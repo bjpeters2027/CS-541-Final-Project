@@ -62,7 +62,7 @@ class ImageManifestDataset(Dataset):
             return self.transform(image.convert("RGB")), int(label)
 
 
-def load_data(filename, batch_size, test_split=0.2, validation_split=0.1, *, train_fraction=1.0):
+"""def load_data(filename, batch_size, test_split=0.2, validation_split=0.1, *, train_fraction=1.0):
     if not 0 < train_fraction <= 1:
         raise ValueError("Training fraction must be greater than 0 and at most 1.")
 
@@ -115,3 +115,4 @@ def load_data(filename, batch_size, test_split=0.2, validation_split=0.1, *, tra
             batch_size=batch_size,
         ),
     )
+"""
